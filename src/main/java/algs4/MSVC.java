@@ -1,5 +1,7 @@
 package algs4;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -49,6 +51,8 @@ public class MSVC {
 
     private RandomHashSet<Edge> createFields(Vector<Vector<Short>> graph) {
         RandomHashSet<Edge> uncolouredEdges = new RandomHashSet<>(rng);
+        missingColoursOf = new HashMap<>();
+        vertexSet = new HashSet<>();
         for (short i = 0; i < graph.size(); i++) {
             for (short j :
                     graph.get(i)) {
@@ -58,7 +62,7 @@ public class MSVC {
                 uncolouredEdges.add(currentEdge);
 
                 Vector<Byte> missingColours = new Vector<>(maxDegree);
-                for (byte k = 1; k <= maxDegree; k++) {
+                for (byte k = 1; k <= maxDegree + 1; k++) {
                     missingColours.add(k);
                 }
 
@@ -87,16 +91,16 @@ public class MSVC {
             visitedVertices.put(i, false);
         }
 
-        Vector<Object> firstChainReturn = FirstChain(colouring, edge, x);
-        Vector<Edge> firstFan = (Vector<Edge>) firstChainReturn.get(0);
-        Vector<Edge> firstPath = (Vector<Edge>) firstChainReturn.get(1);
+        FirstChainResult firstChainResult = firstChain(colouring, edge, x);
+        Vector<Edge> firstFan = firstChainResult.fan;
+        Vector<Edge> firstPath = firstChainResult.path;
         Vector<Vector<Edge>> chainAsConcat = new Vector<>();
         Vector<Edge> firstEdge = new Vector<>();
         firstEdge.add(edge);
         chainAsConcat.add(firstEdge);
 
         HashMap<Edge, Byte> localColouring;
-        localColouring = (HashMap<Edge, Byte>) colouring.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)); // shamelessly adapted from sprinter's code on Stack Overflow
+        localColouring = (@NotNull HashMap<Edge, Byte>) colouring.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)); // shamelessly adapted from sprinter's code on Stack Overflow
         int k = 0;
         boolean shortEnough = false;
 
@@ -120,15 +124,14 @@ public class MSVC {
                 byte secondToLastColour = localColouring.get(currentPath.get(currentPath.size() - 2)); // denoted alpha in Bernshteyn's
 
                 localColouring = shift(localColouring, chainToShift, true);
-                Vector<Object> nextChainReturn = nextChain(localColouring, lastOfPath, lastVOfLastP, secondToLastColour, lastColour);
-                Vector<Edge> FTilde = (Vector<Edge>) nextChainReturn.get(0);
-                Vector<Edge> PTilde = (Vector<Edge>) nextChainReturn.get(1);
-                int[] visitedResult = alreadyVisited(FTilde, PTilde);
-                boolean intersection = visitedResult[0] != 0;
-                int intersectionPosition = visitedResult[1]; // Denoted j in Bernshteyn's
+                NextChainResult nextChainResult = nextChain(localColouring, lastOfPath, lastVOfLastP, secondToLastColour, lastColour);
+                Vector<Edge> FTilde = nextChainResult.f;
+                Vector<Edge> PTilde = nextChainResult.p;
+                VisitedResult visitedResult = alreadyVisited(FTilde, PTilde);
+                boolean intersection = visitedResult.visited;
+                int intersectionPosition = visitedResult.j; // Denoted j in Bernshteyn's
                 if (intersection) {
-                    Vector<Edge> toRevert = new Vector<>();
-                    toRevert.addAll(chainAsConcat.get(intersectionPosition));
+                    Vector<Edge> toRevert = new Vector<>(chainAsConcat.get(intersectionPosition));
                     for (int i = intersectionPosition + 1; i < 2 * k; i++) {
                         Vector<Edge> chainToAdd = chainAsConcat.get(i);
                         toRevert.addAll(chainToAdd.subList(0, chainToAdd.size()));
@@ -195,34 +198,92 @@ public class MSVC {
         }
     }
 
-    private int[] alreadyVisited(Vector<Edge> fTilde, Vector<Edge> pTilde) {
+    private @NotNull VisitedResult alreadyVisited(Vector<Edge> fTilde, Vector<Edge> pTilde) {
         //TODO
         return null;
     }
 
-    private Vector<Object> nextChain(HashMap<Edge, Byte> localColouring, Edge lastOfPath, short lastVOfLastP, byte secondToLastColour, byte lastColour) {
+    private record VisitedResult(boolean visited, int j) {
+    }
+
+    ;
+
+    private @NotNull NextChainResult nextChain(HashMap<Edge, Byte> localColouring, Edge lastOfPath, short lastVOfLastP, byte secondToLastColour, byte lastColour) {
         //Todo
         return null;
     }
+
+    private record NextChainResult(Vector<Edge> f, Vector<Edge> p) {
+    }
+
+    ;
 
     private HashMap<Edge, Byte> shift(HashMap<Edge, Byte> localColouring, Vector<Edge> chainToPass, boolean ascending) {
         //TODO
         return null;
     }
 
-    private Vector<Object> FirstChain(HashMap<Edge, Byte> colouring, Edge edge, int x) {
+    private @NotNull FirstChainResult firstChain(HashMap<Edge, Byte> colouring, Edge edge, int x) {
+        FirstFanResult firstFanResult = firstFan(colouring, edge, x);
+        Vector<Edge> fan = firstFanResult.fan;
+        byte beta = firstFanResult.color;
+        int j = firstFanResult.j;
+        FirstChainResult res;
+        Vector<Byte> coloursOfEdge = missingColoursOf.get(edge);
+        if (coloursOfEdge.contains(beta)) {
+            Vector<Edge> path = new Vector<>();
+            path.add(fan.lastElement());
+            res = new FirstChainResult(fan, path);
+        } else {
+            byte alpha;
+            byte i = 0;
+            do {
+                alpha = coloursOfEdge.get(i);
+                i++;
+            } while (alpha == 0); // TODO consider using the get in the condition
+            Vector<Edge> fPrime = new Vector<>(fan.subList(0, j));
+            Vector<Edge> p = createPath(fan.lastElement(), shift(colouring, fan, true), alpha, beta, 2 * pathMaxLength);
+            Vector<Edge> pPrime = createPath(fPrime.lastElement(), shift(colouring, fPrime, true), alpha, beta, 2 * pathMaxLength);
+            if (p.size() > 2 * pathMaxLength || p.lastElement().y != x) {
+                Vector<Edge> truncatedPath = new Vector<>(p.subList(0,2*pathMaxLength));
+                res = new FirstChainResult(fan, truncatedPath);
+            } else {
+                Vector<Edge> truncatedPath = new Vector<>(pPrime.subList(0,2*pathMaxLength));
+                res = new FirstChainResult(fPrime, truncatedPath);
+            }
+        }
+        return res;
+    }
+    // TODO there are probably some places where we can "just" setSize on chains :)
+
+    private @NotNull Vector<Edge> createPath(Edge edge, HashMap<Edge, Byte> shift, byte alpha, byte beta, int limit) {
+        //TODO p14
+        return null;
+    }
+
+    private record FirstChainResult(Vector<Edge> fan, Vector<Edge> path) {
+    }
+
+    private FirstFanResult firstFan(HashMap<Edge, Byte> colouring, Edge edge, int edgeX) {
         //TODO
         return null;
     }
 
-    private Vector<Object> createFirstFan(HashMap<Edge, Integer> colouring, Edge edge, int edgeX) {
-        //TODO
-        return null;
+    private record FirstFanResult(Vector<Edge> fan, byte color, int j) {
     }
 
-    private HashMap<Edge, Byte> augmentWith(HashMap<Edge, Byte> colouring, Vector<Edge> vizingChain) {
-        //TODO
-        return null;
+    private HashMap<Edge, Byte> augmentWith(@NotNull HashMap<Edge, Byte> colouring, Vector<Edge> msvc) {
+        colouring = shift(colouring, msvc, true);
+        Edge edgeOfInterest = msvc.lastElement();
+        byte validColour;
+        Vector<Byte> coloursOfInterest = missingColoursOf.get(edgeOfInterest);
+        byte i = 0;
+        do {
+            validColour = coloursOfInterest.get(i);
+            i++;
+        } while (validColour == 0);
+        colouring.put(edgeOfInterest, validColour);
+        return colouring;
     }
 
     class Edge {
