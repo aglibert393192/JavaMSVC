@@ -135,7 +135,7 @@ public class MSVC {
                 NextChainResult nextChainResult = nextChain(localColouring, preparationResult.lastOfPath(), preparationResult.lastVOfLastP(), secondToLastColour, lastColour);
                 Vector<Edge> FTilde = nextChainResult.f;
                 Vector<Edge> PTilde = nextChainResult.p;
-                VisitedResult visitedResult = alreadyVisited(FTilde, PTilde);
+                VisitedResult visitedResult = alreadyVisited(FTilde, PTilde, chainAsConcat, visitedVertices, visitedEdges);
                 boolean intersection = visitedResult.visited;
                 int intersectionPosition = visitedResult.j; // Denoted j in Bernshteyn's
                 if (intersection) {
@@ -204,7 +204,6 @@ public class MSVC {
                                      int lastVOfLastP, Vector<Edge> chainToShift) {
     }
 
-    //TODO change the ugly uses of Vector<Object> as return to records. If you have time of course :D
     private static boolean successfulChain(Vector<Vector<Edge>> chainAsConcat, Vector<Edge> firstFan, Vector<Edge> firstPath) {
         boolean shortEnough;
         shortEnough = true;
@@ -242,9 +241,30 @@ public class MSVC {
         }
     }
 
-    private @NotNull VisitedResult alreadyVisited(Vector<Edge> fTilde, Vector<Edge> pTilde) {
-        //TODO
-        return null;
+    private @NotNull VisitedResult alreadyVisited(Vector<Edge> fTilde, Vector<Edge> pTilde, Vector<Vector<Edge>> chainAsConcat, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
+        int j = 0;
+        boolean alreadyVisited = false;
+        Vector<Edge> concat = new Vector<>(fTilde);
+        concat.addAll(pTilde);
+        for (Edge edge :
+                concat) {
+            alreadyVisited |= visitedEdges.get(edge) || visitedVertices.get(edge.x) || visitedVertices.get(edge.y);
+        }
+        if (alreadyVisited) {
+            for (int i = 0; i < chainAsConcat.size(); i += 2) {
+                Vector<Edge> currentFan = chainAsConcat.get(i);
+                Vector<Edge> currentPath = chainAsConcat.get(i + 1);
+                Vector<Edge> chainConcat = new Vector<>(currentFan);
+                chainConcat.addAll(currentPath);
+                for (Edge edge :
+                        concat) {
+                    if (chainConcat.contains(edge))
+                        break; // n+1/2 loop, not magical but I don't wanna do it otherwise :P
+                }
+                j++;
+            }
+        }
+        return new VisitedResult(alreadyVisited, j);
     }
 
     private record VisitedResult(boolean visited, int j) {
@@ -294,6 +314,7 @@ public class MSVC {
     }
 
     private NextFanResult NextFan(HashMap<Edge, Byte> localColouring, Edge e, int x, byte beta) {
+        //TODO
         return new NextFanResult(null, (byte) 1, 0);
     }
 
@@ -317,8 +338,7 @@ public class MSVC {
             byte e1Colour = res.get(e1);
             res.put(e0, e1Colour);
             removeFromMissingOf(e0, e1Colour);
-            // TODO update of the missing colours. For the current edge changes nothing,
-            //  but for all the neighbours, now they might have one less colour
+
             res.put(e1, (byte) 0);
             int sharedNode = e0.sharedNode(e1);
             addToMissingOf(e1, e1Colour, sharedNode, colouring);
