@@ -9,7 +9,7 @@ public class MSVC {
     /**
      * Contains all the colours for each of the edges. Colours used are marked as "0" in their
      */
-    private HashMap<Edge, HashSet<Byte>> missingColoursOf;
+    private HashMap<Integer, HashSet<Byte>> missingColoursOfV;
     private final Random rng;
     private HashSet<Edge> edgeSet;
     private HashSet<Integer> vertexSet;
@@ -63,7 +63,7 @@ public class MSVC {
 
     private RandomHashSet<Edge> createFields(Vector<Vector<Integer>> graph, HashMap<Edge, Byte> colouring) {
         RandomHashSet<Edge> uncolouredEdges = new RandomHashSet<>(rng);
-        missingColoursOf = new HashMap<>();
+        missingColoursOfV = new HashMap<>();
         vertexSet = new HashSet<>();
 
         for (int i = 0; i < graph.size(); i++) {
@@ -74,14 +74,14 @@ public class MSVC {
 
                 uncolouredEdges.add(currentEdge);
 
-                HashSet<Byte> missingColours = new HashSet<>(maxDegree);
-                for (byte k = 1; k <= maxDegree + 1; k++) {
-                    missingColours.add(k);
-                }
-
-                missingColoursOf.put(currentEdge, missingColours);
                 colouring.put(currentEdge, (byte) 0);
             }
+            HashSet<Byte> missingColours = new HashSet<>(maxDegree);
+            for (byte k = 1; k <= maxDegree + 1; k++) {
+                missingColours.add(k);
+            }
+
+            missingColoursOfV.put(i, missingColours);
             vertexSet.add(i);
         }
         pathMaxLength = maxDegree; // square and multiply with 13, our exponent so      1 : S&M
@@ -127,7 +127,7 @@ public class MSVC {
             if (firstPath.size() <= comparator) {
                 shortEnough = successfulChain(chainAsConcat, firstFan, firstPath);
             } else {
-                PreparationResult preparationResult = getPreparation(comparator, firstFan, firstPath, visitedVertices, visitedEdges);
+                PreparationResult preparationResult = preparation(comparator, firstFan, firstPath, visitedVertices, visitedEdges);
                 byte lastColour = localColouring.get(preparationResult.currentPath().lastElement()); // denoted beta in Bernsheyn's
                 byte secondToLastColour = localColouring.get(preparationResult.currentPath().get(preparationResult.currentPath().size() - 2)); // denoted alpha in Bernshteyn's
 
@@ -187,7 +187,7 @@ public class MSVC {
     }
 
     @NotNull
-    private MSVC.PreparationResult getPreparation(int comparator, Vector<Edge> firstFan, Vector<Edge> firstPath, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
+    private MSVC.PreparationResult preparation(int comparator, Vector<Edge> firstFan, Vector<Edge> firstPath, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
         int shorteningDistance = rng.nextInt(pathMaxLength, comparator); // since excludes the bound, -1 isn't needed
         Vector<Edge> currentFan = firstFan;
         Vector<Edge> currentPath = (Vector<Edge>) firstPath.subList(0, shorteningDistance + 1);
@@ -252,12 +252,53 @@ public class MSVC {
 
     ;
 
-    private @NotNull NextChainResult nextChain(HashMap<Edge, Byte> localColouring, Edge lastOfPath, int lastVOfLastP, byte secondToLastColour, byte lastColour) {
+    private @NotNull NextChainResult nextChain(HashMap<Edge, Byte> localColouring, Edge e, int x, byte alpha, byte beta) {
         //Todo
-        return null;
+        NextChainResult res;
+        NextFanResult nextFanResult = NextFan(localColouring, e, x, beta);
+        Vector<Edge> p;
+        byte delta = nextFanResult.delta;
+        Vector<Edge> f = nextFanResult.fan;
+        if (missingColoursOfV.get(x).contains(delta)) {
+            p = new Vector<>();
+            p.add(f.lastElement());
+            res = new NextChainResult(f, p);
+        } else {
+            if (delta == beta) {
+                p = createPath(f.lastElement(),
+                        chainShift(localColouring, new LinkedList<>(f), true),
+                        alpha, beta, 2 * pathMaxLength);
+                res = new NextChainResult(f, p);
+            }
+            byte gamma;
+            Iterator<Byte> iterator = missingColoursOfV.get(x).iterator();
+            do {
+                gamma = iterator.next();
+            } while (gamma == alpha);
+            Vector<Edge> fPrime = new Vector<>(f.subList(0, nextFanResult.j));
+            p = createPath(f.lastElement(),
+                    chainShift(localColouring, new LinkedList<>(f), true),
+                    gamma, delta, 2 * pathMaxLength);
+            Vector<Edge> pPrime = createPath(fPrime.lastElement(),
+                    chainShift(localColouring, new LinkedList<>(f), true),
+                    gamma, delta, 2 * pathMaxLength);
+            if (p.size() > 2 * pathMaxLength || p.lastElement().y != x) {
+                res = new NextChainResult(f, p);
+                // TODO wait I have a problem here because of the non-ordering I imposed
+            } else res = new NextChainResult(fPrime, pPrime);
+        }
+        return res;
     }
 
     private record NextChainResult(Vector<Edge> f, Vector<Edge> p) {
+    }
+
+    private NextFanResult NextFan(HashMap<Edge, Byte> localColouring, Edge e, int x, byte beta) {
+        return new NextFanResult(null, (byte) 1, 0);
+    }
+
+    private record NextFanResult(Vector<Edge> fan, byte delta, int j) {
+
     }
 
     private @NotNull HashMap<Edge, Byte> chainShift(HashMap<Edge, Byte> colouring, LinkedList<Edge> chainToShift, boolean ascending) {
@@ -275,12 +316,12 @@ public class MSVC {
             e1 = iterator.next();
             byte e1Colour = res.get(e1);
             res.put(e0, e1Colour);
-            removeFromNeighboursOf(e0, e1Colour);
+            removeFromMissingOf(e0, e1Colour);
             // TODO update of the missing colours. For the current edge changes nothing,
             //  but for all the neighbours, now they might have one less colour
             res.put(e1, (byte) 0);
             int sharedNode = e0.sharedNode(e1);
-            addToNeighboursOf(e1, e1Colour, sharedNode, colouring);
+            addToMissingOf(e1, e1Colour, sharedNode, colouring);
             // problem when making it become blank
             e0 = e1;
         }
@@ -288,22 +329,14 @@ public class MSVC {
         return res;
     }
 
-    private void addToNeighboursOf(Edge edge, byte previousColour, int sharedNode, HashMap<Edge, Byte> colouring) {
-        int nodeToInspect = edge.x == sharedNode ? edge.y : edge.x; // we know the shared node is still coloured by our previousColour so cannot be updated
-        for (int neigh :
-                graph.get(nodeToInspect)) {
-            Edge edgeToUpdate = new Edge(nodeToInspect, neigh);
-            int nodeToIgnore = edgeToUpdate.sharedNode(edge);
-            int nodeToInspect2 = edgeToUpdate.x == nodeToIgnore ? edgeToUpdate.y : edgeToUpdate.x;
-            boolean mustUpdate = true;
-            for (int neigh2 :
-                    graph.get(nodeToInspect2)) {
-                mustUpdate = colouring.get(neigh2) != previousColour && mustUpdate;
-            }
-            if (mustUpdate) {
-                missingColoursOf.get(edgeToUpdate).add(previousColour);
-            }
-        }
+    private void addToMissingOf(Edge edge, byte previousColour, int sharedNode, HashMap<Edge, Byte> colouring) {
+        int nodeToUpdate = edge.x == sharedNode ? edge.y : edge.x;
+        missingColoursOfV.get(nodeToUpdate).add(previousColour);
+    }
+
+    private void removeFromMissingOf(Edge colouredEdge, byte chosenColour) {
+        missingColoursOfV.get(colouredEdge.x).remove(chosenColour);
+        missingColoursOfV.get(colouredEdge.y).remove(chosenColour);
     }
 
     @NotNull
@@ -317,7 +350,7 @@ public class MSVC {
         byte beta = firstFanResult.color;
         int j = firstFanResult.j;
         FirstChainResult res;
-        HashSet<Byte> coloursOfEdge = missingColoursOf.get(edge);
+        HashSet<Byte> coloursOfEdge = missingColoursOfV.get(x);
         if (coloursOfEdge.contains(beta)) {
             Vector<Edge> path = new Vector<>();
             path.add(fan.lastElement());
@@ -339,6 +372,7 @@ public class MSVC {
         return res;
     }
     // TODO there are probably some places where we can "just" setSize on chains :)
+
     // most possibly because we know that we have more than the number of edges by pre-conditions
 
     private @NotNull Vector<Edge> createPath(Edge edge, HashMap<Edge, Byte> shift, byte alpha, byte beta, int limit) {
@@ -347,6 +381,7 @@ public class MSVC {
     }
 
     private record FirstChainResult(Vector<Edge> fan, Vector<Edge> path) {
+
     }
 
     private @NotNull FirstFanResult firstFan(HashMap<Edge, Byte> colouring, Edge edge, int edgeX) {
@@ -355,47 +390,30 @@ public class MSVC {
     }
 
     private record FirstFanResult(Vector<Edge> fan, byte color, int j) {
-    }
 
+    }
     //todo change every chain to a linked list ?
+
     private HashMap<Edge, Byte> augmentWith(@NotNull HashMap<Edge, Byte> colouring, Vector<Edge> msvc) {
         colouring = chainShift(colouring, new LinkedList<>(msvc), true);
         Edge edgeOfInterest = msvc.lastElement();
         byte validColour;
-        HashSet<Byte> coloursOfInterest = missingColoursOf.get(edgeOfInterest);
+        HashSet<Byte> coloursOfInterest = missingColoursOfV.get(edgeOfInterest.x); // this is an arbitrary choice of colour
         validColour = coloursOfInterest.iterator().next();
-        removeFromNeighboursOf(edgeOfInterest, validColour);
+        removeFromMissingOf(edgeOfInterest, validColour);
         colouring.put(edgeOfInterest, validColour);
         return colouring;
     }
 
-    private void removeFromNeighboursOf(Edge colouredEdge, byte chosenColour) {
-        int u = colouredEdge.x;
-        int v = colouredEdge.y;
-        for (int neigh :
-                graph.get(u)) {
-            missingColoursOf.get(new Edge(u, neigh)).remove(chosenColour);
-        }
-        for (int neigh :
-                graph.get(v)) {
-            missingColoursOf.get(new Edge(v, neigh)).remove(chosenColour);
-        }
-    }
-
     class Edge {
         private static int numberOfVertices;
-        private final int x;
-        private final int y;
-
+        private final int x, y, max, min;
 
         public Edge(int x, int y) {
-            if (x < y) {
-                this.x = x;
-                this.y = y;
-            } else {
-                this.x = y;
-                this.y = x;
-            }
+            this.x = x;
+            this.y = y;
+            max = Math.max(x, y);
+            min = Math.min(y, x);
         }
 
         public static void setNumberOfVertices(int numberOfVertices) {
@@ -411,7 +429,7 @@ public class MSVC {
 
         @Override
         public int hashCode() {
-            return numberOfVertices * x + y;
+            return numberOfVertices * max + min;
         }
 
         @Override
@@ -419,9 +437,16 @@ public class MSVC {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             Edge edge = (Edge) o;
-            return x == edge.x && y == edge.y;
+            return (x == edge.x && y == edge.y) || (x == edge.y && y == edge.x);
         }
 
+        @Override
+        public String toString() {
+            return "Edge{" +
+                    "x=" + min +
+                    ", y=" + max +
+                    '}';
+        }
     }
 
 }
