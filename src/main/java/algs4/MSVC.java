@@ -314,8 +314,56 @@ public class MSVC {
     }
 
     private NextFanResult NextFan(HashMap<Edge, Byte> localColouring, Edge e, int x, byte beta) {
-        //TODO
-        return new NextFanResult(null, (byte) 1, 0);
+        NextFanPreprationResult nextFanPreparationResult = getNextFanPreparationResult(localColouring, e, x, beta);
+        int k = 0;
+        int z = nextFanPreparationResult.y();
+        nextFanPreparationResult.indexOf().put(z, k);
+        NextFanResult res = null;
+        boolean notBuilt = true;
+        while (k < graph.get(x).size()) {
+            byte eta = nextFanPreparationResult.delta().get(z);
+            if (missingColoursOfV.get(x).contains(eta) || eta == beta) {
+                res = new NextFanResult(nextFanPreparationResult.f(), eta, k + 1);
+            } else {
+                z = nextFanPreparationResult.neighbouringColour().get(eta);
+                if (nextFanPreparationResult.indexOf().containsKey(z)) {
+                    res = new NextFanResult(nextFanPreparationResult.f(), eta, nextFanPreparationResult.indexOf().get(z));
+                } else {
+                    k++;
+                    nextFanPreparationResult.indexOf().put(z, k);
+                    nextFanPreparationResult.f().add(new Edge(x, z));
+                }
+            }
+        }
+        return res; //Currently can return null. Might wanna check into this :-/
+    }
+
+    @NotNull
+    private NextFanPreprationResult getNextFanPreparationResult(HashMap<Edge, Byte> localColouring, Edge e, int x, byte beta) {
+        HashMap<Byte, Integer> neighbouringColour = new HashMap<>(maxDegree + 1);
+        int y = e.x == x ? e.y : e.x;
+        Vector<Integer> neighXSansY = new Vector<>(graph.get(x));
+        HashMap<Integer, Integer> indexOf = new HashMap<>(neighXSansY.size());
+        neighXSansY.remove(y);
+
+        HashMap<Integer, Byte> delta = new HashMap<>(neighXSansY.size());
+        Iterator<Byte> iterator = missingColoursOfV.get(y).iterator();
+        Byte colour;
+        do {
+            colour = iterator.next();
+            delta.put(y, colour);
+        } while (iterator.hasNext() || colour == beta);
+        for (int z :
+                neighXSansY) {
+            delta.put(z, missingColoursOfV.get(z).iterator().next());
+            neighbouringColour.put(localColouring.get(new Edge(x, z)), z);
+        }
+        Vector<Edge> f = new Vector<>();
+        f.add(e);
+        return new NextFanPreprationResult(neighbouringColour, y, indexOf, delta, f);
+    }
+
+    private record NextFanPreprationResult(HashMap<Byte, Integer> neighbouringColour, int y, HashMap<Integer, Integer> indexOf, HashMap<Integer, Byte> delta, Vector<Edge> f) {
     }
 
     private record NextFanResult(Vector<Edge> fan, byte delta, int j) {
