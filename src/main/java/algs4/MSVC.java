@@ -6,10 +6,15 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class MSVC {
-    private HashMap<Edge, Vector<Byte>> missingColoursOf;
+    /**
+     * Contains all the colours for each of the edges. Colours used are marked as "0" in their
+     */
+    private HashMap<Edge, HashSet<Byte>> missingColoursOf;
     private final Random rng;
     private HashSet<Edge> edgeSet;
-    private HashSet<Short> vertexSet;
+    private HashSet<Integer> vertexSet;
+    //2147483647
+
     /**
      * The maximum degree of a node in our graph.
      * Denoted Delta in Bernshteyn's paper
@@ -19,7 +24,13 @@ public class MSVC {
      * The maximum path length we are ready to accept, which will be 400*maxDegree^13.
      * Denoted l in Bernshteyn's paper
      */
-    private int pathMaxLength; //using int, the limit before overflowing is Delta=4 :-/ Cannot use BigInteger because cannot address afterwards. Might be interesting to switch to lower level language to make it work ? Cannot use long because cannot address arrays in long :-/
+    private int pathMaxLength; //using int, the limit before overflowing is Delta=3 :-/
+    // Cannot use BigInteger because cannot address afterwards. Cannot use long because cannot address arrays in long :-/
+
+    // Might be interesting to switch to lower level language to make it work ? Only with enough memory,
+    // which if we used 2 concatenated shorts (to reduce usage) would amount to
+
+    private Vector<Vector<Integer>> graph;
 
     public MSVC() {
         rng = new Random();
@@ -29,44 +40,47 @@ public class MSVC {
         rng = new Random(seed);
     }
 
-    public HashMap<Edge, Byte> edgeColouring(Vector<Vector<Short>> graph, byte maxDegree) { //TODO must be dealt with, needs a conversion
-        Edge.setMaxDegree(maxDegree);
+    public HashMap<Edge, Byte> edgeColouring(Vector<Vector<Integer>> graph, byte maxDegree) { //TODO must be dealt with, needs a conversion
+        Edge.setNumberOfVertices(graph.size());
         this.maxDegree = maxDegree;
         edgeSet = new RandomHashSet<>(rng);
-        RandomHashSet<Edge> uncolouredEdges = createFields(graph);
-
+        this.graph = graph;
         HashMap<Edge, Byte> colouring = new HashMap<>(edgeSet.size());
+        RandomHashSet<Edge> uncolouredEdges = createFields(graph, colouring);
 
         Iterator<Edge> itU;
+        itU = uncolouredEdges.iterator();
         do {
-            itU = uncolouredEdges.iterator();
             Edge edge = itU.next();
             Vector<Edge> vizingChain = MSVA(colouring, edge, edge.x);
             colouring = augmentWith(colouring, vizingChain);
             uncolouredEdges.remove(edge);
+            itU = uncolouredEdges.iterator();
         } while (itU.hasNext());
 
         return colouring;
     }
 
-    private RandomHashSet<Edge> createFields(Vector<Vector<Short>> graph) {
+    private RandomHashSet<Edge> createFields(Vector<Vector<Integer>> graph, HashMap<Edge, Byte> colouring) {
         RandomHashSet<Edge> uncolouredEdges = new RandomHashSet<>(rng);
         missingColoursOf = new HashMap<>();
         vertexSet = new HashSet<>();
-        for (short i = 0; i < graph.size(); i++) {
-            for (short j :
+
+        for (int i = 0; i < graph.size(); i++) {
+            for (int j :
                     graph.get(i)) {
                 Edge currentEdge = new Edge(i, j);
                 edgeSet.add(currentEdge);
 
                 uncolouredEdges.add(currentEdge);
 
-                Vector<Byte> missingColours = new Vector<>(maxDegree);
+                HashSet<Byte> missingColours = new HashSet<>(maxDegree);
                 for (byte k = 1; k <= maxDegree + 1; k++) {
                     missingColours.add(k);
                 }
 
                 missingColoursOf.put(currentEdge, missingColours);
+                colouring.put(currentEdge, (byte) 0);
             }
             vertexSet.add(i);
         }
@@ -79,15 +93,15 @@ public class MSVC {
         return uncolouredEdges;
     }
 
-    private Vector<Edge> MSVA(HashMap<Edge, Byte> colouring, Edge edge, int x) {
+    private Vector<Edge> MSVA(@NotNull HashMap<Edge, Byte> colouring, Edge edge, int x) {
         HashMap<Edge, Boolean> visitedEdges = new HashMap<>(edgeSet.size());
-        HashMap<Short, Boolean> visitedVertices = new HashMap<>(vertexSet.size());
+        HashMap<Integer, Boolean> visitedVertices = new HashMap<>(vertexSet.size());
         for (Edge e :
                 edgeSet) {
             visitedEdges.put(e, false);
         }
 
-        for (short i = 0; i < vertexSet.size(); i++) {
+        for (Integer i = 0; i < vertexSet.size(); i++) {
             visitedVertices.put(i, false);
         }
 
@@ -100,7 +114,7 @@ public class MSVC {
         chainAsConcat.add(firstEdge);
 
         HashMap<Edge, Byte> localColouring;
-        localColouring = (@NotNull HashMap<Edge, Byte>) colouring.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)); // shamelessly adapted from sprinter's code on Stack Overflow
+        localColouring = deepCopyColouring(colouring); // shamelessly adapted from sprinter's code on Stack Overflow
         int k = 0;
         boolean shortEnough = false;
 
@@ -115,7 +129,7 @@ public class MSVC {
                 Vector<Edge> currentPath = (Vector<Edge>) firstPath.subList(0, shorteningDistance + 1);
                 updateVisited(currentFan, visitedVertices, currentPath, visitedEdges);
                 Edge lastOfPath = currentPath.lastElement(); // Denoted uv in Bernshteyn's
-                short lastVOfLastP = lastOfPath.y; // Denoted v in Bernshteyn's
+                int lastVOfLastP = lastOfPath.y; // Denoted v in Bernshteyn's
                 Vector<Edge> chainToShift = new Vector<>(currentFan);
                 chainToShift.addAll(currentPath.subList(1, currentPath.size()));
 
@@ -123,7 +137,7 @@ public class MSVC {
                 byte lastColour = localColouring.get(currentPath.lastElement()); // denoted beta in Bernsheyn's
                 byte secondToLastColour = localColouring.get(currentPath.get(currentPath.size() - 2)); // denoted alpha in Bernshteyn's
 
-                localColouring = shift(localColouring, chainToShift, true);
+                localColouring = chainShift(localColouring, new LinkedList<>(chainToShift), true);
                 NextChainResult nextChainResult = nextChain(localColouring, lastOfPath, lastVOfLastP, secondToLastColour, lastColour);
                 Vector<Edge> FTilde = nextChainResult.f;
                 Vector<Edge> PTilde = nextChainResult.p;
@@ -136,7 +150,7 @@ public class MSVC {
                         Vector<Edge> chainToAdd = chainAsConcat.get(i);
                         toRevert.addAll(chainToAdd.subList(0, chainToAdd.size()));
                     }
-                    localColouring = shift(localColouring, toRevert, false);
+                    localColouring = chainShift(localColouring, new LinkedList<>(toRevert), false);
                     updateRemoved(intersectionPosition, k, chainAsConcat, visitedVertices, visitedEdges);
                     firstFan = chainAsConcat.get(intersectionPosition);
                     firstPath = chainAsConcat.get(intersectionPosition + 1);// TODO how to get P' ? might have to store it. Don't wanna think about it right now...
@@ -169,7 +183,7 @@ public class MSVC {
         return shortEnough;
     }
 
-    private static void updateVisited(Vector<Edge> currentFan, HashMap<Short, Boolean> visitedVertices, Vector<Edge> currentPath, HashMap<Edge, Boolean> visitedEdges) {
+    private static void updateVisited(Vector<Edge> currentFan, HashMap<Integer, Boolean> visitedVertices, Vector<Edge> currentPath, HashMap<Edge, Boolean> visitedEdges) {
         for (Edge visitedEdge :
                 currentFan) {
             visitedVertices.put(visitedEdge.x, true);
@@ -180,7 +194,7 @@ public class MSVC {
         }
     }
 
-    private static void updateRemoved(int intersectionPosition, int k, Vector<Vector<Edge>> chainAsConcat, HashMap<Short, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
+    private static void updateRemoved(int intersectionPosition, int k, Vector<Vector<Edge>> chainAsConcat, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
         for (int i = intersectionPosition; i < 2 * k; i += 2) {
             Vector<Edge> removedFan = chainAsConcat.get(i);
             for (Edge removedEdge :
@@ -208,7 +222,7 @@ public class MSVC {
 
     ;
 
-    private @NotNull NextChainResult nextChain(HashMap<Edge, Byte> localColouring, Edge lastOfPath, short lastVOfLastP, byte secondToLastColour, byte lastColour) {
+    private @NotNull NextChainResult nextChain(HashMap<Edge, Byte> localColouring, Edge lastOfPath, int lastVOfLastP, byte secondToLastColour, byte lastColour) {
         //Todo
         return null;
     }
@@ -216,11 +230,55 @@ public class MSVC {
     private record NextChainResult(Vector<Edge> f, Vector<Edge> p) {
     }
 
-    ;
+    private @NotNull HashMap<Edge, Byte> chainShift(HashMap<Edge, Byte> colouring, LinkedList<Edge> chainToShift, boolean ascending) {
+        HashMap<Edge, Byte> res = deepCopyColouring(colouring);
+        Iterator<Edge> iterator;
 
-    private HashMap<Edge, Byte> shift(HashMap<Edge, Byte> localColouring, Vector<Edge> chainToPass, boolean ascending) {
-        //TODO
-        return null;
+        if (ascending)
+            iterator = chainToShift.iterator();
+        else
+            iterator = chainToShift.descendingIterator();
+
+        Edge e0 = iterator.next();
+        Edge e1;
+        while (iterator.hasNext()) {
+            e1 = iterator.next();
+            byte e1Colour = res.get(e1);
+            res.put(e0, e1Colour);
+            removeFromNeighboursOf(e0, e1Colour);
+            // TODO update of the missing colours. For the current edge changes nothing,
+            //  but for all the neighbours, now they might have one less colour
+            res.put(e1, (byte) 0);
+            int sharedNode = e0.sharedNode(e1);
+            addToNeighboursOf(e1, e1Colour, sharedNode, colouring);
+            // problem when making it become blank
+            e0 = e1;
+        }
+
+        return res;
+    }
+
+    private void addToNeighboursOf(Edge edge, byte previousColour, int sharedNode, HashMap<Edge, Byte> colouring) {
+        int nodeToInspect = edge.x == sharedNode ? edge.y : edge.x; // we know the shared node is still coloured by our previousColour so cannot be updated
+        for (int neigh :
+                graph.get(nodeToInspect)) {
+            Edge edgeToUpdate = new Edge(nodeToInspect, neigh);
+            int nodeToIgnore = edgeToUpdate.sharedNode(edge);
+            int nodeToInspect2 = edgeToUpdate.x == nodeToIgnore ? edgeToUpdate.y : edgeToUpdate.x;
+            boolean mustUpdate = true;
+            for (int neigh2 :
+                    graph.get(nodeToInspect2)) {
+                mustUpdate = colouring.get(neigh2) != previousColour && mustUpdate;
+            }
+            if (mustUpdate) {
+                missingColoursOf.get(edgeToUpdate).add(previousColour);
+            }
+        }
+    }
+
+    @NotNull
+    private static HashMap<Edge, Byte> deepCopyColouring(HashMap<Edge, Byte> localColouring) {
+        return (@NotNull HashMap<Edge, Byte>) localColouring.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private @NotNull FirstChainResult firstChain(HashMap<Edge, Byte> colouring, Edge edge, int x) {
@@ -229,32 +287,29 @@ public class MSVC {
         byte beta = firstFanResult.color;
         int j = firstFanResult.j;
         FirstChainResult res;
-        Vector<Byte> coloursOfEdge = missingColoursOf.get(edge);
+        HashSet<Byte> coloursOfEdge = missingColoursOf.get(edge);
         if (coloursOfEdge.contains(beta)) {
             Vector<Edge> path = new Vector<>();
             path.add(fan.lastElement());
             res = new FirstChainResult(fan, path);
         } else {
-            byte alpha;
-            byte i = 0;
-            do {
-                alpha = coloursOfEdge.get(i);
-                i++;
-            } while (alpha == 0); // TODO consider using the get in the condition
+            byte alpha = coloursOfEdge.iterator().next();
+            // TODO is there an update here ?
             Vector<Edge> fPrime = new Vector<>(fan.subList(0, j));
-            Vector<Edge> p = createPath(fan.lastElement(), shift(colouring, fan, true), alpha, beta, 2 * pathMaxLength);
-            Vector<Edge> pPrime = createPath(fPrime.lastElement(), shift(colouring, fPrime, true), alpha, beta, 2 * pathMaxLength);
+            Vector<Edge> p = createPath(fan.lastElement(), chainShift(colouring, new LinkedList<>(fan), true), alpha, beta, 2 * pathMaxLength);
+            Vector<Edge> pPrime = createPath(fPrime.lastElement(), chainShift(colouring, new LinkedList<>(fPrime), true), alpha, beta, 2 * pathMaxLength);
             if (p.size() > 2 * pathMaxLength || p.lastElement().y != x) {
-                Vector<Edge> truncatedPath = new Vector<>(p.subList(0,2*pathMaxLength));
+                Vector<Edge> truncatedPath = new Vector<>(p.subList(0, 2 * pathMaxLength));
                 res = new FirstChainResult(fan, truncatedPath);
             } else {
-                Vector<Edge> truncatedPath = new Vector<>(pPrime.subList(0,2*pathMaxLength));
+                Vector<Edge> truncatedPath = new Vector<>(pPrime.subList(0, 2 * pathMaxLength));
                 res = new FirstChainResult(fPrime, truncatedPath);
             }
         }
         return res;
     }
     // TODO there are probably some places where we can "just" setSize on chains :)
+    // most possibly because we know that we have more than the number of edges by pre-conditions
 
     private @NotNull Vector<Edge> createPath(Edge edge, HashMap<Edge, Byte> shift, byte alpha, byte beta, int limit) {
         //TODO p14
@@ -264,7 +319,7 @@ public class MSVC {
     private record FirstChainResult(Vector<Edge> fan, Vector<Edge> path) {
     }
 
-    private FirstFanResult firstFan(HashMap<Edge, Byte> colouring, Edge edge, int edgeX) {
+    private @NotNull FirstFanResult firstFan(HashMap<Edge, Byte> colouring, Edge edge, int edgeX) {
         //TODO
         return null;
     }
@@ -272,27 +327,39 @@ public class MSVC {
     private record FirstFanResult(Vector<Edge> fan, byte color, int j) {
     }
 
+    //todo change every chain to a linked list ?
     private HashMap<Edge, Byte> augmentWith(@NotNull HashMap<Edge, Byte> colouring, Vector<Edge> msvc) {
-        colouring = shift(colouring, msvc, true);
+        colouring = chainShift(colouring, new LinkedList<>(msvc), true);
         Edge edgeOfInterest = msvc.lastElement();
         byte validColour;
-        Vector<Byte> coloursOfInterest = missingColoursOf.get(edgeOfInterest);
-        byte i = 0;
-        do {
-            validColour = coloursOfInterest.get(i);
-            i++;
-        } while (validColour == 0);
+        HashSet<Byte> coloursOfInterest = missingColoursOf.get(edgeOfInterest);
+        validColour = coloursOfInterest.iterator().next();
+        removeFromNeighboursOf(edgeOfInterest, validColour);
         colouring.put(edgeOfInterest, validColour);
         return colouring;
     }
 
+    private void removeFromNeighboursOf(Edge colouredEdge, byte chosenColour) {
+        int u = colouredEdge.x;
+        int v = colouredEdge.y;
+        for (int neigh :
+                graph.get(u)) {
+            missingColoursOf.get(new Edge(u, neigh)).remove(chosenColour);
+        }
+        for (int neigh :
+                graph.get(v)) {
+            missingColoursOf.get(new Edge(v, neigh)).remove(chosenColour);
+        }
+    }
+
     class Edge {
-        private static byte maxDegree;
-        private final short x, y; // size because if goes higher, then might need 64GB of memory. Currently needs max 8 for those two shorts :-/
+        private static int numberOfVertices;
+        private final int x;
+        private final int y;
 
 
-        public Edge(short x, short y) {
-            if (x > y) {
+        public Edge(int x, int y) {
+            if (x < y) {
                 this.x = x;
                 this.y = y;
             } else {
@@ -301,13 +368,20 @@ public class MSVC {
             }
         }
 
-        public static void setMaxDegree(byte maxDegree) {
-            Edge.maxDegree = maxDegree;
+        public static void setNumberOfVertices(int numberOfVertices) {
+            Edge.numberOfVertices = numberOfVertices;
+        }
+
+        public int sharedNode(Edge other) {
+            int res = -1;
+            if (this.x == other.x || this.x == other.y) res = this.x;
+            else if (this.y == other.x || this.y == other.y) res = this.x;
+            return res;
         }
 
         @Override
         public int hashCode() {
-            return maxDegree * x + y;
+            return numberOfVertices * x + y;
         }
 
         @Override
