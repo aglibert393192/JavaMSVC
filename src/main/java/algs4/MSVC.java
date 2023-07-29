@@ -94,16 +94,9 @@ public class MSVC {
     }
 
     private Vector<Edge> MSVA(@NotNull HashMap<Edge, Byte> colouring, Edge edge, int x) {
-        HashMap<Edge, Boolean> visitedEdges = new HashMap<>(edgeSet.size());
-        HashMap<Integer, Boolean> visitedVertices = new HashMap<>(vertexSet.size());
-        for (Edge e :
-                edgeSet) {
-            visitedEdges.put(e, false);
-        }
-
-        for (Integer i = 0; i < vertexSet.size(); i++) {
-            visitedVertices.put(i, false);
-        }
+        FillVisitedResult fillVisitedResult = getFillVisitedResult();
+        HashMap<Integer, Boolean> visitedVertices = fillVisitedResult.visitedVertices();
+        HashMap<Edge, Boolean> visitedEdges = fillVisitedResult.visitedEdges();
 
         FirstChainResult firstChainResult = firstChain(colouring, edge, x);
         Vector<Edge> firstFan = firstChainResult.fan;
@@ -115,30 +108,31 @@ public class MSVC {
 
         HashMap<Edge, Byte> localColouring;
         localColouring = deepCopyColouring(colouring); // shamelessly adapted from sprinter's code on Stack Overflow
-        int k = 0;
+
         boolean shortEnough = false;
 
         int comparator = pathMaxLength * 2;
+        chainAsConcat = mainMSVALoop(shortEnough, firstPath, comparator, chainAsConcat, firstFan, visitedVertices, visitedEdges, localColouring);
+        Vector<Edge> chain = new Vector<>();
+        for (Vector<Edge> innerChain :
+                chainAsConcat) {
+            chain.addAll(innerChain);
+        }
+        return chain;
+    }
+
+    private Vector<Vector<Edge>> mainMSVALoop(boolean shortEnough, Vector<Edge> firstPath, int comparator, Vector<Vector<Edge>> chainAsConcat, Vector<Edge> firstFan, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges, HashMap<Edge, Byte> localColouring) {
+        int k = 0;
         while (!shortEnough) {
             if (firstPath.size() <= comparator) {
                 shortEnough = successfulChain(chainAsConcat, firstFan, firstPath);
             } else {
-                //    v|v Denoted l^prime in Bernshteyn's paper
-                int shorteningDistance = rng.nextInt(pathMaxLength, comparator); // since excludes the bound, -1 isn't needed
-                Vector<Edge> currentFan = firstFan;
-                Vector<Edge> currentPath = (Vector<Edge>) firstPath.subList(0, shorteningDistance + 1);
-                updateVisited(currentFan, visitedVertices, currentPath, visitedEdges);
-                Edge lastOfPath = currentPath.lastElement(); // Denoted uv in Bernshteyn's
-                int lastVOfLastP = lastOfPath.y; // Denoted v in Bernshteyn's
-                Vector<Edge> chainToShift = new Vector<>(currentFan);
-                chainToShift.addAll(currentPath.subList(1, currentPath.size()));
+                PreparationResult preparationResult = getPreparation(comparator, firstFan, firstPath, visitedVertices, visitedEdges);
+                byte lastColour = localColouring.get(preparationResult.currentPath().lastElement()); // denoted beta in Bernsheyn's
+                byte secondToLastColour = localColouring.get(preparationResult.currentPath().get(preparationResult.currentPath().size() - 2)); // denoted alpha in Bernshteyn's
 
-
-                byte lastColour = localColouring.get(currentPath.lastElement()); // denoted beta in Bernsheyn's
-                byte secondToLastColour = localColouring.get(currentPath.get(currentPath.size() - 2)); // denoted alpha in Bernshteyn's
-
-                localColouring = chainShift(localColouring, new LinkedList<>(chainToShift), true);
-                NextChainResult nextChainResult = nextChain(localColouring, lastOfPath, lastVOfLastP, secondToLastColour, lastColour);
+                localColouring = chainShift(localColouring, new LinkedList<>(preparationResult.chainToShift()), true);
+                NextChainResult nextChainResult = nextChain(localColouring, preparationResult.lastOfPath(), preparationResult.lastVOfLastP(), secondToLastColour, lastColour);
                 Vector<Edge> FTilde = nextChainResult.f;
                 Vector<Edge> PTilde = nextChainResult.p;
                 VisitedResult visitedResult = alreadyVisited(FTilde, PTilde);
@@ -146,10 +140,7 @@ public class MSVC {
                 int intersectionPosition = visitedResult.j; // Denoted j in Bernshteyn's
                 if (intersection) {
                     Vector<Edge> toRevert = new Vector<>(chainAsConcat.get(intersectionPosition));
-                    for (int i = intersectionPosition + 1; i < 2 * k; i++) {
-                        Vector<Edge> chainToAdd = chainAsConcat.get(i);
-                        toRevert.addAll(chainToAdd.subList(0, chainToAdd.size()));
-                    }
+                    buildRevertedChain(chainAsConcat, k, intersectionPosition, toRevert);
                     localColouring = chainShift(localColouring, new LinkedList<>(toRevert), false);
                     updateRemoved(intersectionPosition, k, chainAsConcat, visitedVertices, visitedEdges);
                     firstFan = chainAsConcat.get(intersectionPosition);
@@ -157,8 +148,8 @@ public class MSVC {
                     chainAsConcat = new Vector<>(chainAsConcat.subList(0, intersectionPosition));
                     k = intersectionPosition / 2; //intersectionPosition should be even :-/
                 } else {
-                    chainAsConcat.add(currentFan);
-                    chainAsConcat.add(new Vector<>(currentPath.subList(1, currentPath.size())));
+                    chainAsConcat.add(preparationResult.currentFan());
+                    chainAsConcat.add(new Vector<>(preparationResult.currentPath().subList(1, preparationResult.currentPath().size())));
                     firstFan = FTilde;
                     firstPath = PTilde;
                     k++;
@@ -166,12 +157,51 @@ public class MSVC {
                 // cannot use the "sublist" function of Vector because "only" uses int, which would mean Delta limited to 4.
             } // cannot use BigInteger nor long because won't work, as Java "only" addresses in int:-/
         } // limitation
-        Vector<Edge> chain = new Vector<>();
-        for (Vector<Edge> innerChain :
-                chainAsConcat) {
-            chain.addAll(innerChain);
+        return chainAsConcat;
+    }
+
+    private static void buildRevertedChain(Vector<Vector<Edge>> chainAsConcat, int k, int intersectionPosition, Vector<Edge> toRevert) {
+        for (int i = intersectionPosition + 1; i < 2 * k; i++) {
+            Vector<Edge> chainToAdd = chainAsConcat.get(i);
+            toRevert.addAll(chainToAdd.subList(0, chainToAdd.size()));
         }
-        return chain;
+    }
+
+    @NotNull
+    private FillVisitedResult getFillVisitedResult() {
+        HashMap<Edge, Boolean> visitedEdges = new HashMap<>(edgeSet.size());
+        HashMap<Integer, Boolean> visitedVertices = new HashMap<>(vertexSet.size());
+        for (Edge e :
+                edgeSet) {
+            visitedEdges.put(e, false);
+        }
+
+        for (int i = 0; i < vertexSet.size(); i++) {
+            visitedVertices.put(i, false);
+        }
+        FillVisitedResult fillVisitedResult = new FillVisitedResult(visitedEdges, visitedVertices);
+        return fillVisitedResult;
+    }
+
+    private record FillVisitedResult(HashMap<Edge, Boolean> visitedEdges, HashMap<Integer, Boolean> visitedVertices) {
+    }
+
+    @NotNull
+    private MSVC.PreparationResult getPreparation(int comparator, Vector<Edge> firstFan, Vector<Edge> firstPath, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
+        int shorteningDistance = rng.nextInt(pathMaxLength, comparator); // since excludes the bound, -1 isn't needed
+        Vector<Edge> currentFan = firstFan;
+        Vector<Edge> currentPath = (Vector<Edge>) firstPath.subList(0, shorteningDistance + 1);
+        updateVisited(currentFan, visitedVertices, currentPath, visitedEdges);
+        Edge lastOfPath = currentPath.lastElement(); // Denoted uv in Bernshteyn's
+        int lastVOfLastP = lastOfPath.y; // Denoted v in Bernshteyn's
+        Vector<Edge> chainToShift = new Vector<>(currentFan);
+        chainToShift.addAll(currentPath.subList(1, currentPath.size()));
+        PreparationResult preparationResult = new PreparationResult(currentFan, currentPath, lastOfPath, lastVOfLastP, chainToShift);
+        return preparationResult;
+    }
+
+    private record PreparationResult(Vector<Edge> currentFan, Vector<Edge> currentPath, Edge lastOfPath,
+                                     int lastVOfLastP, Vector<Edge> chainToShift) {
     }
 
     //TODO change the ugly uses of Vector<Object> as return to records. If you have time of course :D
