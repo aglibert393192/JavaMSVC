@@ -179,8 +179,7 @@ public class MSVC {
         for (int i = 0; i < vertexSet.size(); i++) {
             visitedVertices.put(i, false);
         }
-        FillVisitedResult fillVisitedResult = new FillVisitedResult(visitedEdges, visitedVertices);
-        return fillVisitedResult;
+        return new FillVisitedResult(visitedEdges, visitedVertices);
     }
 
     private record FillVisitedResult(HashMap<Edge, Boolean> visitedEdges, HashMap<Integer, Boolean> visitedVertices) {
@@ -189,15 +188,13 @@ public class MSVC {
     @NotNull
     private MSVC.PreparationResult preparation(int comparator, Vector<Edge> firstFan, Vector<Edge> firstPath, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
         int shorteningDistance = rng.nextInt(pathMaxLength, comparator); // since excludes the bound, -1 isn't needed
-        Vector<Edge> currentFan = firstFan;
         Vector<Edge> currentPath = (Vector<Edge>) firstPath.subList(0, shorteningDistance + 1);
-        updateVisited(currentFan, visitedVertices, currentPath, visitedEdges);
+        updateVisited(firstFan, visitedVertices, currentPath, visitedEdges);
         Edge lastOfPath = currentPath.lastElement(); // Denoted uv in Bernshteyn's
         int lastVOfLastP = lastOfPath.y; // Denoted v in Bernshteyn's
-        Vector<Edge> chainToShift = new Vector<>(currentFan);
+        Vector<Edge> chainToShift = new Vector<>(firstFan);
         chainToShift.addAll(currentPath.subList(1, currentPath.size()));
-        PreparationResult preparationResult = new PreparationResult(currentFan, currentPath, lastOfPath, lastVOfLastP, chainToShift);
-        return preparationResult;
+        return new PreparationResult(firstFan, currentPath, lastOfPath, lastVOfLastP, chainToShift);
     }
 
     private record PreparationResult(Vector<Edge> currentFan, Vector<Edge> currentPath, Edge lastOfPath,
@@ -270,8 +267,6 @@ public class MSVC {
     private record VisitedResult(boolean visited, int j) {
     }
 
-    ;
-
     private @NotNull NextChainResult nextChain(HashMap<Edge, Byte> localColouring, Edge e, int x, byte alpha, byte beta) {
         //Todo
         NextChainResult res;
@@ -289,23 +284,25 @@ public class MSVC {
                         chainShift(localColouring, new LinkedList<>(f), true),
                         alpha, beta, 2 * pathMaxLength);
                 res = new NextChainResult(f, p);
+            } else {
+                byte gamma;
+                Iterator<Byte> iterator = missingColoursOfV.get(x).iterator();
+                do {
+                    gamma = iterator.next();
+                } while (gamma == alpha);
+                Vector<Edge> fPrime = new Vector<>(f.subList(0, nextFanResult.j));
+                Vector<Edge> pPrime;
+                p = createPath(f.lastElement(),
+                        chainShift(localColouring, new LinkedList<>(f), true),
+                        gamma, delta, 2 * pathMaxLength);
+                pPrime = createPath(fPrime.lastElement(),
+                        chainShift(localColouring, new LinkedList<>(f), true),
+                        gamma, delta, 2 * pathMaxLength);
+                if (p.size() > 2 * pathMaxLength || p.lastElement().y != x) {
+                    res = new NextChainResult(f, p);
+                    // TODO wait I have a problem here because of the non-ordering I imposed
+                } else res = new NextChainResult(fPrime, pPrime);
             }
-            byte gamma;
-            Iterator<Byte> iterator = missingColoursOfV.get(x).iterator();
-            do {
-                gamma = iterator.next();
-            } while (gamma == alpha);
-            Vector<Edge> fPrime = new Vector<>(f.subList(0, nextFanResult.j));
-            p = createPath(f.lastElement(),
-                    chainShift(localColouring, new LinkedList<>(f), true),
-                    gamma, delta, 2 * pathMaxLength);
-            Vector<Edge> pPrime = createPath(fPrime.lastElement(),
-                    chainShift(localColouring, new LinkedList<>(f), true),
-                    gamma, delta, 2 * pathMaxLength);
-            if (p.size() > 2 * pathMaxLength || p.lastElement().y != x) {
-                res = new NextChainResult(f, p);
-                // TODO wait I have a problem here because of the non-ordering I imposed
-            } else res = new NextChainResult(fPrime, pPrime);
         }
         return res;
     }
@@ -319,7 +316,6 @@ public class MSVC {
         int z = nextFanPreparationResult.y();
         nextFanPreparationResult.indexOf().put(z, k);
         NextFanResult res = null;
-        boolean notBuilt = true;
         while (k < graph.get(x).size()) {
             byte eta = nextFanPreparationResult.delta().get(z);
             if (missingColoursOfV.get(x).contains(eta) || eta == beta) {
@@ -363,7 +359,9 @@ public class MSVC {
         return new NextFanPreprationResult(neighbouringColour, y, indexOf, delta, f);
     }
 
-    private record NextFanPreprationResult(HashMap<Byte, Integer> neighbouringColour, int y, HashMap<Integer, Integer> indexOf, HashMap<Integer, Byte> delta, Vector<Edge> f) {
+    private record NextFanPreprationResult(HashMap<Byte, Integer> neighbouringColour, int y,
+                                           HashMap<Integer, Integer> indexOf, HashMap<Integer, Byte> delta,
+                                           Vector<Edge> f) {
     }
 
     private record NextFanResult(Vector<Edge> fan, byte delta, int j) {
@@ -389,7 +387,7 @@ public class MSVC {
 
             res.put(e1, (byte) 0);
             int sharedNode = e0.sharedNode(e1);
-            addToMissingOf(e1, e1Colour, sharedNode, colouring);
+            addToMissingOf(e1, e1Colour, sharedNode);
             // problem when making it become blank
             e0 = e1;
         }
@@ -397,7 +395,7 @@ public class MSVC {
         return res;
     }
 
-    private void addToMissingOf(Edge edge, byte previousColour, int sharedNode, HashMap<Edge, Byte> colouring) {
+    private void addToMissingOf(Edge edge, byte previousColour, int sharedNode) {
         int nodeToUpdate = edge.x == sharedNode ? edge.y : edge.x;
         missingColoursOfV.get(nodeToUpdate).add(previousColour);
     }
