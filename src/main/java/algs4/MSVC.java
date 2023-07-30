@@ -40,7 +40,7 @@ public class MSVC {
         rng = new Random(seed);
     }
 
-    public HashMap<Edge, Byte> edgeColouring(Vector<Vector<Integer>> graph, byte maxDegree) { //TODO must be dealt with, needs a conversion
+    public HashMap<Integer[], Byte> edgeColouring(Vector<Vector<Integer>> graph, byte maxDegree) {
         Edge.setNumberOfVertices(graph.size());
         this.maxDegree = maxDegree;
         edgeSet = new RandomHashSet<>(rng);
@@ -57,8 +57,17 @@ public class MSVC {
             uncolouredEdges.remove(edge);
             itU = uncolouredEdges.iterator();
         } while (itU.hasNext());
+        return colouringToArray(colouring);
 
-        return colouring;
+    }
+
+    private HashMap<Integer[],Byte> colouringToArray(HashMap<Edge, Byte> colouring) {
+        HashMap<Integer[],Byte> res = new HashMap<>();
+        for (Edge key :
+                colouring.keySet()) {
+            res.put(key.toArray(), colouring.get(key));
+        }
+        return res;
     }
 
     private RandomHashSet<Edge> createFields(Vector<Vector<Integer>> graph, HashMap<Edge, Byte> colouring) {
@@ -144,7 +153,9 @@ public class MSVC {
                     localColouring = chainShift(localColouring, new LinkedList<>(toRevert), false);
                     updateRemoved(intersectionPosition, k, chainAsConcat, visitedVertices, visitedEdges);
                     firstFan = chainAsConcat.get(intersectionPosition);
-                    firstPath = chainAsConcat.get(intersectionPosition + 1);// TODO how to get P' ? might have to store it. Don't wanna think about it right now...
+                    Vector<Edge> chainToElongate = chainAsConcat.get(intersectionPosition + 1);
+                    elongate(chainToElongate, localColouring);
+                    firstPath = chainToElongate;
                     chainAsConcat = new Vector<>(chainAsConcat.subList(0, intersectionPosition));
                     k = intersectionPosition / 2; //intersectionPosition should be even :-/
                 } else {
@@ -158,6 +169,15 @@ public class MSVC {
             } // cannot use BigInteger nor long because won't work, as Java "only" addresses in int:-/
         } // limitation
         return chainAsConcat;
+    }
+
+    private void elongate(Vector<Edge> chainToElongate, HashMap<Edge, Byte> localColouring) {
+        Edge lastE = chainToElongate.lastElement();
+        byte lastColour = localColouring.get(lastE);
+        byte secondToLastColour = localColouring.get(new Vector<>(chainToElongate.subList(0, chainToElongate.size() - 1)).lastElement());
+
+        elongatePath(localColouring, secondToLastColour, lastColour, lastE.y, lastE.x, chainToElongate);
+
     }
 
     private static void buildRevertedChain(Vector<Vector<Edge>> chainAsConcat, int k, int intersectionPosition, Vector<Edge> toRevert) {
@@ -419,7 +439,6 @@ public class MSVC {
             res = new FirstChainResult(fan, path);
         } else {
             byte alpha = coloursOfEdge.iterator().next();
-            // TODO is there an update here ?
             Vector<Edge> fPrime = new Vector<>(fan.subList(0, j));
             Vector<Edge> p = createPath(fan.lastElement(), chainShift(colouring, new LinkedList<>(fan), true), alpha, beta, 2 * pathMaxLength);
             Vector<Edge> pPrime = createPath(fPrime.lastElement(), chainShift(colouring, new LinkedList<>(fPrime), true), alpha, beta, 2 * pathMaxLength);
@@ -437,9 +456,46 @@ public class MSVC {
 
     // most possibly because we know that we have more than the number of edges by pre-conditions
 
-    private @NotNull Vector<Edge> createPath(Edge edge, HashMap<Edge, Byte> shift, byte alpha, byte beta, int limit) {
-        //TODO p14
-        return null;
+    private @NotNull Vector<Edge> createPath(Edge edge, HashMap<Edge, Byte> colouring, byte alpha, byte beta, int limit) {
+        Vector<Edge> path = new Vector<>();
+        path.add(edge);
+
+        int u = edge.x;
+        int v = edge.y;
+        int x, y;
+        if (missingColoursOfV.get(u).contains(alpha)) {
+            x = u;
+            y = v;
+        } else {
+            x = v;
+            y = u;
+        }
+        path.add(new Edge(x, y));
+
+        elongatePath(colouring, alpha, beta, y, x, path);
+        return path;
+    }
+
+    private void elongatePath(HashMap<Edge, Byte> colouring, byte alpha, byte beta, int y, int x, Vector<Edge> path) {
+        boolean takeAlpha = true;
+        HashSet<Integer> visitedVertices = new HashSet<>();
+        byte currentColour = alpha;
+        int next = y;
+        visitedVertices.add(x);
+        while (!visitedVertices.contains(next) & path.size() < pathMaxLength) {
+            visitedVertices.add(next);
+            for (int neigh :
+                    graph.get(next)) {
+                Byte linkColour = colouring.get(new Edge(neigh, next));
+                if (linkColour == currentColour) {
+                    takeAlpha = !takeAlpha;
+                    currentColour = takeAlpha ? alpha : beta;
+                    path.add(new Edge(neigh, next));
+                    next = neigh;
+                    break;
+                }
+            }
+        }
     }
 
     private record FirstChainResult(Vector<Edge> fan, Vector<Edge> path) {
@@ -518,6 +574,13 @@ public class MSVC {
             return res;
         }
 
+        public Integer[] toArray() {
+            Integer[] res = new Integer[2];
+            res[0] = x;
+            res[1] = y;
+            return res;
+        }
+
         @Override
         public int hashCode() {
             return numberOfVertices * max + min;
@@ -528,7 +591,7 @@ public class MSVC {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             Edge edge = (Edge) o;
-            return (x == edge.x && y == edge.y) || (x == edge.y && y == edge.x);
+            return this.min == edge.min && this.max == edge.max;
         }
 
         @Override
