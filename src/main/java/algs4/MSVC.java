@@ -28,7 +28,7 @@ public class MSVC {
     // Cannot use BigInteger because cannot address afterwards. Cannot use long because cannot address arrays in long :-/
 
     // Might be interesting to switch to lower level language to make it work ? Only with enough memory,
-    // which if we used 2 concatenated shorts (to reduce usage) would amount to
+    // which, if we used 2 concatenated shorts (to reduce usage) would amount to
 
     private Vector<Vector<Integer>> graph;
 
@@ -127,8 +127,8 @@ public class MSVC {
             if (firstPath.size() <= comparator) {
                 shortEnough = successfulChain(chainAsConcat, firstFan, firstPath);
             } else {
-                PreparationResult preparationResult = preparation(comparator, firstFan, firstPath, visitedVertices, visitedEdges);
-                byte lastColour = localColouring.get(preparationResult.currentPath().lastElement()); // denoted beta in Bernsheyn's
+                MSVAPreparationResult preparationResult = MSVAPreparation(comparator, firstFan, firstPath, visitedVertices, visitedEdges);
+                byte lastColour = localColouring.get(preparationResult.currentPath().lastElement()); // denoted beta in Bernshteyn's
                 byte secondToLastColour = localColouring.get(preparationResult.currentPath().get(preparationResult.currentPath().size() - 2)); // denoted alpha in Bernshteyn's
 
                 localColouring = chainShift(localColouring, new LinkedList<>(preparationResult.chainToShift()), true);
@@ -186,7 +186,7 @@ public class MSVC {
     }
 
     @NotNull
-    private MSVC.PreparationResult preparation(int comparator, Vector<Edge> firstFan, Vector<Edge> firstPath, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
+    private MSVC.MSVAPreparationResult MSVAPreparation(int comparator, Vector<Edge> firstFan, Vector<Edge> firstPath, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
         int shorteningDistance = rng.nextInt(pathMaxLength, comparator); // since excludes the bound, -1 isn't needed
         Vector<Edge> currentPath = (Vector<Edge>) firstPath.subList(0, shorteningDistance + 1);
         updateVisited(firstFan, visitedVertices, currentPath, visitedEdges);
@@ -194,19 +194,17 @@ public class MSVC {
         int lastVOfLastP = lastOfPath.y; // Denoted v in Bernshteyn's
         Vector<Edge> chainToShift = new Vector<>(firstFan);
         chainToShift.addAll(currentPath.subList(1, currentPath.size()));
-        return new PreparationResult(firstFan, currentPath, lastOfPath, lastVOfLastP, chainToShift);
+        return new MSVAPreparationResult(firstFan, currentPath, lastOfPath, lastVOfLastP, chainToShift);
     }
 
-    private record PreparationResult(Vector<Edge> currentFan, Vector<Edge> currentPath, Edge lastOfPath,
-                                     int lastVOfLastP, Vector<Edge> chainToShift) {
+    private record MSVAPreparationResult(Vector<Edge> currentFan, Vector<Edge> currentPath, Edge lastOfPath,
+                                         int lastVOfLastP, Vector<Edge> chainToShift) {
     }
 
     private static boolean successfulChain(Vector<Vector<Edge>> chainAsConcat, Vector<Edge> firstFan, Vector<Edge> firstPath) {
-        boolean shortEnough;
-        shortEnough = true;
         chainAsConcat.add(firstFan);
         chainAsConcat.add(firstPath);
-        return shortEnough;
+        return true;
     }
 
     private static void updateVisited(Vector<Edge> currentFan, HashMap<Integer, Boolean> visitedVertices, Vector<Edge> currentPath, HashMap<Edge, Boolean> visitedEdges) {
@@ -268,7 +266,6 @@ public class MSVC {
     }
 
     private @NotNull NextChainResult nextChain(HashMap<Edge, Byte> localColouring, Edge e, int x, byte alpha, byte beta) {
-        //Todo
         NextChainResult res;
         NextFanResult nextFanResult = NextFan(localColouring, e, x, beta);
         Vector<Edge> p;
@@ -300,7 +297,6 @@ public class MSVC {
                         gamma, delta, 2 * pathMaxLength);
                 if (p.size() > 2 * pathMaxLength || p.lastElement().y != x) {
                     res = new NextChainResult(f, p);
-                    // TODO wait I have a problem here because of the non-ordering I imposed
                 } else res = new NextChainResult(fPrime, pPrime);
             }
         }
@@ -311,7 +307,7 @@ public class MSVC {
     }
 
     private NextFanResult NextFan(HashMap<Edge, Byte> localColouring, Edge e, int x, byte beta) {
-        NextFanPreprationResult nextFanPreparationResult = getNextFanPreparationResult(localColouring, e, x, beta);
+        NextFanPreparationResult nextFanPreparationResult = getNextFanPreparationResult(localColouring, e, x, beta);
         int k = 0;
         int z = nextFanPreparationResult.y();
         nextFanPreparationResult.indexOf().put(z, k);
@@ -335,7 +331,7 @@ public class MSVC {
     }
 
     @NotNull
-    private NextFanPreprationResult getNextFanPreparationResult(HashMap<Edge, Byte> localColouring, Edge e, int x, byte beta) {
+    private NextFanPreparationResult getNextFanPreparationResult(HashMap<Edge, Byte> localColouring, Edge e, int x, byte beta) {
         HashMap<Byte, Integer> neighbouringColour = new HashMap<>(maxDegree + 1);
         int y = e.x == x ? e.y : e.x;
         Vector<Integer> neighXSansY = new Vector<>(graph.get(x));
@@ -356,12 +352,12 @@ public class MSVC {
         }
         Vector<Edge> f = new Vector<>();
         f.add(e);
-        return new NextFanPreprationResult(neighbouringColour, y, indexOf, delta, f);
+        return new NextFanPreparationResult(neighbouringColour, y, indexOf, delta, f);
     }
 
-    private record NextFanPreprationResult(HashMap<Byte, Integer> neighbouringColour, int y,
-                                           HashMap<Integer, Integer> indexOf, HashMap<Integer, Byte> delta,
-                                           Vector<Edge> f) {
+    private record NextFanPreparationResult(HashMap<Byte, Integer> neighbouringColour, int y,
+                                            HashMap<Integer, Integer> indexOf, HashMap<Integer, Byte> delta,
+                                            Vector<Edge> f) {
     }
 
     private record NextFanResult(Vector<Edge> fan, byte delta, int j) {
@@ -450,9 +446,38 @@ public class MSVC {
 
     }
 
-    private @NotNull FirstFanResult firstFan(HashMap<Edge, Byte> colouring, Edge edge, int edgeX) {
-        //TODO
-        return null;
+    private @NotNull FirstFanResult firstFan(HashMap<Edge, Byte> colouring, Edge e, int x) {
+        HashMap<Byte, Integer> nbr = new HashMap<>(maxDegree + 1);
+        Vector<Integer> neighOfX = graph.get(x);
+        HashMap<Integer, Byte> beta = new HashMap<>(neighOfX.size());
+        for (int neigh :
+                neighOfX) {
+            beta.put(neigh, missingColoursOfV.get(neigh).iterator().next());
+            nbr.put(colouring.get(new Edge(x, neigh)), neigh);
+        }
+        HashMap<Integer, Integer> indexOf = new HashMap<>(neighOfX.size());
+        Vector<Edge> f = new Vector<>();
+        f.add(e);
+        int k = 0;
+        int z = e.x == x ? e.y : e.x;
+        indexOf.put(z, k);
+        FirstFanResult res = null;
+        while (k < neighOfX.size()) {
+            byte eta = beta.get(z);
+            if (missingColoursOfV.get(x).contains(eta)) {
+                res = new FirstFanResult(f, eta, k + 1);
+            } else {
+                z = nbr.get(eta);
+                if (indexOf.containsKey(z)) {
+                    res = new FirstFanResult(f, eta, indexOf.get(z));
+                } else {
+                    k++;
+                    indexOf.put(z, k);
+                    f.add(new Edge(x, z));
+                }
+            }
+        }
+        return res;
     }
 
     private record FirstFanResult(Vector<Edge> fan, byte color, int j) {
