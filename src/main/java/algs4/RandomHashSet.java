@@ -1,6 +1,7 @@
 package algs4;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 
 class RandomHashSet<E> extends HashSet<E> {

@@ -3,10 +3,7 @@ package algs4;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Random;
-import java.util.Vector;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,6 +38,13 @@ class MSVCTest {
     void randomGraph() {
         buildRandomBigGraph(1000, (byte) 5);
         colouring = msvc.edgeColouring(graph, maxDegree);
+        assertTrue(msvc.testColouring(colouring, graph));
+    }
+
+    @Test
+    void longVizingChains() {
+        build2BigVizingChainsD3();
+        colouring = msvc.edgeColouring(graph, (byte) 3);
         assertTrue(msvc.testColouring(colouring, graph));
     }
 
@@ -180,5 +184,24 @@ class MSVCTest {
         testGraph(res);
         this.graph = res;
         this.maxDegree = realMaxDegree;
+    }
+
+    private void build2BigVizingChainsD3() {
+        ArrayDeque<Vector<Integer>> graphAsAD;
+        Vector<ArrayDeque<Vector<Integer>>> result = new Vector<>();
+        int pathSize = 47239201;
+        for (int i = 0; i < 2; i++) {
+            graphAsAD = new ArrayDeque<>();
+            Vector<Integer> adjacencyOf0 = new Vector<>(3);
+            oneVizingChain(graphAsAD, adjacencyOf0, pathSize * i, pathSize, 3);
+            result.add(graphAsAD);
+        }
+        ArrayDeque<Vector<Integer>> firstChain = result.firstElement();
+        Iterator<Vector<Integer>> fCIt = firstChain.iterator();
+        ArrayDeque<Vector<Integer>> secondChain = result.lastElement();
+        Iterator<Vector<Integer>> sCIt = secondChain.iterator();
+        secondChain.getLast().add(pathSize);
+        System.out.println("wait for me");
+
     }
 }

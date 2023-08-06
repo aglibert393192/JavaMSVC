@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
 public class MSVC {
     private HashMap<Integer, HashSet<Byte>> missingColoursOfV;
     private final Random rng;
-    private HashSet<Edge> edgeSet;
+    private GetableSet<Edge> edgeSet; // should reduce slightly the memory usage, as every edge is now unique
     private HashSet<Integer> vertexSet;
     //2147483647
 
@@ -43,7 +43,7 @@ public class MSVC {
         //  being a problem is if I have more than 2^32-1 edges, which would not make sense.since integer
         Edge.setNumberOfVertices(graph.size());
         this.maxDegree = maxDegree;
-        edgeSet = new RandomHashSet<>(rng);
+        edgeSet = new GetableSet<>(graph.size());
         this.graph = graph;
         HashMap<Edge, Byte> colouring = new HashMap<>(edgeSet.size());
         RandomHashSet<Edge> uncolouredEdges = createFields(graph, colouring);
@@ -97,7 +97,7 @@ public class MSVC {
         for (int i = 0; i < graph.size(); i++) {
             for (int j :
                     graph.get(i)) {
-                Edge currentEdge = new Edge(i, j);
+                final Edge currentEdge = new Edge(i, j);
                 edgeSet.add(currentEdge);
 
                 uncolouredEdges.add(currentEdge);
@@ -402,7 +402,7 @@ public class MSVC {
                 } else {
                     k++;
                     indexOf.put(z, k);
-                    f.add(new Edge(x, z));
+                    f.add(edgeSet.get(new Edge(x, z)));
                 }
             }
         }
@@ -528,7 +528,7 @@ public class MSVC {
             x = v;
             y = u;
         }
-        path.add(new Edge(x, y));
+        path.add(edgeSet.get(new Edge(x, y)));
 
         elongatePathUntil(colouring, alpha, beta, y, x, path, limit);
         return path;
@@ -548,7 +548,7 @@ public class MSVC {
                 if (linkColour == currentColour) {
                     takeAlpha = !takeAlpha;
                     currentColour = takeAlpha ? alpha : beta;
-                    path.add(new Edge(neigh, next));
+                    path.add(edgeSet.get(new Edge(neigh, next)));
                     next = neigh;
                     break;
                 }
@@ -593,7 +593,7 @@ public class MSVC {
                 } else {
                     k++;
                     indexOf.put(z, k);
-                    f.add(new Edge(x, z));
+                    f.add(edgeSet.get(new Edge(x, z)));
                 }
             }
         }
@@ -620,7 +620,7 @@ public class MSVC {
         return colouring;
     }
 
-    class Edge {
+    static class Edge {
         private static int numberOfVertices;
         private final int x, y, max, min;
 

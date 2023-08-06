@@ -8,8 +8,7 @@ import java.util.Iterator;
 import java.util.Random;
 import java.util.Vector;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 
 class RandomHashSetTest {
@@ -72,4 +71,5 @@ class RandomHashSetTest {
         }
         assertNotEquals(result1,result2);
     }
+
 }
