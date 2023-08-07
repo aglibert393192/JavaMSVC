@@ -1,6 +1,6 @@
 package org.example;
 
-import algs4.MSVC;
+import utils.MSVC;
 
 import java.util.ArrayDeque;
 import java.util.Vector;

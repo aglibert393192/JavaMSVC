@@ -1,7 +1,8 @@
-package algs4;
+package utils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import utils.MSVC;
 
 import java.util.*;
 
@@ -43,7 +44,7 @@ class MSVCTest {
 
     @Test
     void longVizingChains() {
-        build2BigVizingChainsD3();
+        build1BigVizingChainsD3();
         colouring = msvc.edgeColouring(graph, (byte) 3);
         assertTrue(msvc.testColouring(colouring, graph));
     }
@@ -94,12 +95,15 @@ class MSVCTest {
         graph.add(adjacencyOf9);
         Vector<Integer> adjacencyOf10 = new Vector<>();
         adjacencyOf10.add(9);
+        adjacencyOf10.add(3);
+
         graph.add(adjacencyOf10);
         Vector<Integer> adjacencyOf11 = new Vector<>();
         adjacencyOf11.add(4);
         adjacencyOf11.add(5);
         adjacencyOf11.add(6);
         graph.add(adjacencyOf11);
+        testGraph(graph);
         return graph;
     }
 
@@ -186,21 +190,27 @@ class MSVCTest {
         this.maxDegree = realMaxDegree;
     }
 
-    private void build2BigVizingChainsD3() {
-        ArrayDeque<Vector<Integer>> graphAsAD;
-        Vector<ArrayDeque<Vector<Integer>>> result = new Vector<>();
+    private void build1BigVizingChainsD3() {
+        Vector<ArrayDeque<Vector<Integer>>> tmp = new Vector<>();
+        maxDegree = 3;
         int pathSize = 47239201;
-        for (int i = 0; i < 2; i++) {
-            graphAsAD = new ArrayDeque<>();
+        for (int i = 0; i < 1; i++) {
+            ArrayDeque<Vector<Integer>> graphAsAD = new ArrayDeque<>();
             Vector<Integer> adjacencyOf0 = new Vector<>(3);
-            oneVizingChain(graphAsAD, adjacencyOf0, pathSize * i, pathSize, 3);
-            result.add(graphAsAD);
+            oneVizingChain(graphAsAD, adjacencyOf0, pathSize * i + 1, pathSize, maxDegree);
+            tmp.add(graphAsAD);
         }
-        ArrayDeque<Vector<Integer>> firstChain = result.firstElement();
+        ArrayDeque<Vector<Integer>> firstChain = tmp.firstElement();
         Iterator<Vector<Integer>> fCIt = firstChain.iterator();
-        ArrayDeque<Vector<Integer>> secondChain = result.lastElement();
+        ArrayDeque<Vector<Integer>> secondChain = tmp.lastElement();
         Iterator<Vector<Integer>> sCIt = secondChain.iterator();
-        secondChain.getLast().add(pathSize);
+        tmp = null;
+        secondChain.getFirst().add(pathSize - 1);
+        firstChain.addAll(secondChain);
+        secondChain = null;
+        graph = new Vector<>(firstChain);
+        testGraph(graph);
+
         System.out.println("wait for me");
 
     }

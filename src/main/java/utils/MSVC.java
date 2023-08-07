@@ -1,4 +1,4 @@
-package algs4;
+package utils;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
 public class MSVC {
     private HashMap<Integer, HashSet<Byte>> missingColoursOfV;
     private final Random rng;
-    private GetableSet<Edge> edgeSet; // should reduce slightly the memory usage, as every edge is now unique
+    private HashSet<Edge> edgeSet; // should reduce slightly the memory usage, as every edge is now unique
     private HashSet<Integer> vertexSet;
     //2147483647
 
@@ -43,9 +43,9 @@ public class MSVC {
         //  being a problem is if I have more than 2^32-1 edges, which would not make sense.since integer
         Edge.setNumberOfVertices(graph.size());
         this.maxDegree = maxDegree;
-        edgeSet = new GetableSet<>(graph.size());
+        edgeSet = new HashSet<>(graph.size());
         this.graph = graph;
-        HashMap<Edge, Byte> colouring = new HashMap<>(edgeSet.size());
+        HashMap<Edge, Byte> colouring = new HashMap<>(graph.size() * maxDegree / 2);
         RandomHashSet<Edge> uncolouredEdges = createFields(graph, colouring);
 
         Iterator<Edge> itU;
@@ -116,7 +116,7 @@ public class MSVC {
 
         // TODO check where we shorten paths because if Delta too high, then its is nonsensical
         //  And if we have to high a value, we "just" replace it with the max value for int.
-        //  THIS PART IS DANGEROUS, WE ARE REDUCING A LARGER NUMBER -<
+        //  THIS PART IS DANGEROUS, WE ARE REDUCING A LARGER NUMBER >-<
 
         if (maxDegree <= 3) {
             pathMaxLength = maxDegree; // square and multiply with 13, our exponent so      1 : S&M
@@ -402,7 +402,7 @@ public class MSVC {
                 } else {
                     k++;
                     indexOf.put(z, k);
-                    f.add(edgeSet.get(new Edge(x, z)));
+                    f.add(new Edge(x, z));
                 }
             }
         }
@@ -412,7 +412,7 @@ public class MSVC {
     @NotNull
     private NextFanPreparationResult nextFanPreparation(HashMap<Edge, Byte> localColouring, Edge e, int x, byte beta) {
         HashMap<Byte, Integer> neighbouringColour = new HashMap<>(maxDegree + 1);
-        int y = e.x == x ? e.y : e.x;
+        int y = e.getOther(x);
         Vector<Integer> neighXSansY = new Vector<>(graph.get(x));
         HashMap<Integer, Integer> indexOf = new HashMap<>(neighXSansY.size());
         neighXSansY.remove(y);
@@ -528,7 +528,7 @@ public class MSVC {
             x = v;
             y = u;
         }
-        path.add(edgeSet.get(new Edge(x, y)));
+        path.add(new Edge(x, y));
 
         elongatePathUntil(colouring, alpha, beta, y, x, path, limit);
         return path;
@@ -548,7 +548,7 @@ public class MSVC {
                 if (linkColour == currentColour) {
                     takeAlpha = !takeAlpha;
                     currentColour = takeAlpha ? alpha : beta;
-                    path.add(edgeSet.get(new Edge(neigh, next)));
+                    path.add(new Edge(neigh, next));
                     next = neigh;
                     break;
                 }
@@ -563,7 +563,6 @@ public class MSVC {
     private @NotNull FirstFanResult firstFan(HashMap<Edge, Byte> colouring, Edge e, int x) {
         HashMap<Byte, Integer> nbr = new HashMap<>(maxDegree + 1);
         Vector<Integer> neighOfX = graph.get(x);
-        // TODO remove this todo
         HashMap<Integer, Byte> beta = new HashMap<>(neighOfX.size());
         for (int neigh :
                 neighOfX) {
@@ -593,7 +592,7 @@ public class MSVC {
                 } else {
                     k++;
                     indexOf.put(z, k);
-                    f.add(edgeSet.get(new Edge(x, z)));
+                    f.add(new Edge(x, z));
                 }
             }
         }
@@ -633,6 +632,10 @@ public class MSVC {
 
         public boolean contains(int v) {
             return x == v || y == v;
+        }
+
+        public int getOther(int v) {
+            return v == x ? y : x;
         }
 
         public static void setNumberOfVertices(int numberOfVertices) {

@@ -1,4 +1,4 @@
-package algs4;
+package utils;
 
 import java.util.*;
 import java.util.stream.Stream;

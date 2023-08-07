@@ -1,4 +1,4 @@
-package algs4;
+package utils;
 
 
 import org.junit.jupiter.api.BeforeEach;
