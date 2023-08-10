@@ -50,16 +50,16 @@ public class MSVC {
 
         Iterator<Edge> itU;
         itU = uncolouredEdges.iterator();
-        double precPrint = -2.0;
-        byte printInterval = 2;
+        double printInterval = (double) 1 / 3276802;
+        double precPrint = -printInterval;
         do {
             Edge edge = itU.next();
             Vector<Edge> vizingChain = MSVA(colouring, edge, edge.x);
             colouring = augmentWith(colouring, vizingChain);
             uncolouredEdges.remove(edge);
             itU = uncolouredEdges.iterator();
-            int propTreated = ((edgeSet.size() - uncolouredEdges.size()) * 100) / edgeSet.size();
-            if (propTreated % printInterval == 0 && precPrint + printInterval <= propTreated) {
+            double propTreated = (double) ((edgeSet.size() - uncolouredEdges.size()) * 100) / edgeSet.size();
+            if (precPrint + printInterval <= propTreated) {
                 precPrint = (double) 100 * (edgeSet.size() - uncolouredEdges.size()) / edgeSet.size();
                 System.out.format("Has treated %04d/%04d (%2.2f)\n",
                         edgeSet.size() - uncolouredEdges.size(),
@@ -161,16 +161,17 @@ public class MSVC {
     }
 
     private Vector<Vector<Edge>> mainMSVALoop(boolean shortEnough, Vector<Edge> firstPath, int comparator, Vector<Vector<Edge>> chainAsConcat, Vector<Edge> firstFan, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges, HashMap<Edge, Byte> localColouring) {
+
         int k = 0;
         while (!shortEnough) {
             if (firstPath.size() <= comparator) {
                 shortEnough = successfulChain(chainAsConcat, firstFan, firstPath);
             } else {
-                MSVAPreparationResult preparationResult = MSVAPreparation(comparator, firstFan, firstPath, visitedVertices, visitedEdges);
+                MSVAPreparationResult preparationResult = MSVAPreparation(firstFan, firstPath, visitedVertices, visitedEdges);
                 byte lastColour = localColouring.get(preparationResult.currentPath().lastElement()); // denoted beta in Bernshteyn's
                 byte secondToLastColour = localColouring.get(preparationResult.currentPath().get(preparationResult.currentPath().size() - 2)); // denoted alpha in Bernshteyn's
 
-                localColouring = chainShift(localColouring, new LinkedList<>(preparationResult.chainToShift()), true);
+                localColouring = shimano(localColouring, new LinkedList<>(preparationResult.chainToShift()), true);
                 NextChainResult nextChainResult = nextChain(localColouring, preparationResult.lastOfPath(), preparationResult.lastVOfLastP(), secondToLastColour, lastColour);
                 Vector<Edge> FTilde = nextChainResult.f;
                 Vector<Edge> PTilde = nextChainResult.p;
@@ -180,7 +181,7 @@ public class MSVC {
                 if (intersection) {
                     Vector<Edge> toRevert = new Vector<>(chainAsConcat.get(intersectionPosition));
                     buildRevertedChain(chainAsConcat, k, intersectionPosition, toRevert);
-                    localColouring = chainShift(localColouring, new LinkedList<>(toRevert), false);
+                    localColouring = shimano(localColouring, new LinkedList<>(toRevert), false);
                     updateRemoved(intersectionPosition, k, chainAsConcat, visitedVertices, visitedEdges);
                     firstFan = chainAsConcat.get(intersectionPosition);
                     Vector<Edge> chainToElongate = chainAsConcat.get(intersectionPosition + 1);
@@ -258,9 +259,8 @@ public class MSVC {
         return correct;
     }
 
-    @NotNull
-    private MSVC.MSVAPreparationResult MSVAPreparation(int comparator, Vector<Edge> firstFan, Vector<Edge> firstPath, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
-        int shorteningDistance = rng.nextInt(pathMaxLength, comparator); // since excludes the bound, -1 isn't needed
+    private MSVAPreparationResult MSVAPreparation(Vector<Edge> firstFan, Vector<Edge> firstPath, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {
+        int shorteningDistance = pathMaxLength + rng.nextInt(pathMaxLength); // since excludes the bound, -1 isn't needed
         Vector<Edge> currentPath = (Vector<Edge>) firstPath.subList(0, shorteningDistance + 1);
         updateVisited(firstFan, visitedVertices, currentPath, visitedEdges);
         Edge lastOfPath = currentPath.lastElement(); // Denoted uv in Bernshteyn's
@@ -351,7 +351,7 @@ public class MSVC {
         } else {
             if (delta == beta) {
                 p = createPath(f.lastElement(),
-                        chainShift(localColouring, new LinkedList<>(f), true),
+                        shimano(localColouring, new LinkedList<>(f), true),
                         alpha, beta, 2 * pathMaxLength);
                 res = new NextChainResult(f, p);
             } else {
@@ -363,10 +363,10 @@ public class MSVC {
                 Vector<Edge> fPrime = new Vector<>(f.subList(0, nextFanResult.j));
                 Vector<Edge> pPrime;
                 p = createPath(f.lastElement(),
-                        chainShift(localColouring, new LinkedList<>(f), true),
+                        shimano(localColouring, new LinkedList<>(f), true),
                         gamma, delta, 2 * pathMaxLength);
                 pPrime = createPath(fPrime.lastElement(),
-                        chainShift(localColouring, new LinkedList<>(f), true),
+                        shimano(localColouring, new LinkedList<>(f), true),// todo is this correct ?
                         gamma, delta, 2 * pathMaxLength);
                 if (p.size() > 2 * pathMaxLength || p.lastElement().y != x) {
                     res = new NextChainResult(f, p);
@@ -409,6 +409,10 @@ public class MSVC {
         return res; //Currently can return null. Might wanna check into this :-/
     }
 
+    private record NextFanResult(Vector<Edge> fan, byte delta, int j) {
+
+    }
+
     @NotNull
     private NextFanPreparationResult nextFanPreparation(HashMap<Edge, Byte> localColouring, Edge e, int x, byte beta) {
         HashMap<Byte, Integer> neighbouringColour = new HashMap<>(maxDegree + 1);
@@ -437,13 +441,10 @@ public class MSVC {
     private record NextFanPreparationResult(HashMap<Byte, Integer> neighbouringColour, int y,
                                             HashMap<Integer, Integer> indexOf, HashMap<Integer, Byte> delta,
                                             Vector<Edge> f) {
-    }
-
-    private record NextFanResult(Vector<Edge> fan, byte delta, int j) {
 
     }
 
-    private @NotNull HashMap<Edge, Byte> chainShift(HashMap<Edge, Byte> colouring, LinkedList<Edge> chainToShift, boolean ascending) {
+    private @NotNull HashMap<Edge, Byte> shimano(HashMap<Edge, Byte> colouring, LinkedList<Edge> chainToShift, boolean ascending) {
         HashMap<Edge, Byte> res = deepCopyColouring(colouring);
         Iterator<Edge> iterator;
 
@@ -489,7 +490,7 @@ public class MSVC {
     private @NotNull FirstChainResult firstChain(HashMap<Edge, Byte> colouring, Edge edge, int x) {
         FirstFanResult firstFanResult = firstFan(colouring, edge, x);
         Vector<Edge> fan = firstFanResult.fan;
-        byte beta = firstFanResult.color;
+        byte beta = firstFanResult.colour;
         int j = firstFanResult.j;
         FirstChainResult res;
         HashSet<Byte> coloursOfEdge = missingColoursOfV.get(x);
@@ -500,8 +501,8 @@ public class MSVC {
         } else {
             byte alpha = coloursOfEdge.iterator().next();
             Vector<Edge> fPrime = new Vector<>(fan.subList(0, j));
-            Vector<Edge> p = createPath(fan.lastElement(), chainShift(colouring, new LinkedList<>(fan), true), alpha, beta, 2 * pathMaxLength);
-            Vector<Edge> pPrime = createPath(fPrime.lastElement(), chainShift(colouring, new LinkedList<>(fPrime), true), alpha, beta, 2 * pathMaxLength);
+            Vector<Edge> p = createPath(fan.lastElement(), shimano(colouring, new LinkedList<>(fan), true), alpha, beta, 2 * pathMaxLength);
+            Vector<Edge> pPrime = createPath(fPrime.lastElement(), shimano(colouring, new LinkedList<>(fPrime), true), alpha, beta, 2 * pathMaxLength);
             if (p.size() > 2 * pathMaxLength || p.lastElement().y != x) {
                 res = new FirstChainResult(fan, p);
             } else {
@@ -513,6 +514,10 @@ public class MSVC {
     // TODO there are probably some places where we can "just" setSize on chains :)
 
     // most possibly because we know that we have more than the number of edges by pre-conditions
+
+    private record FirstChainResult(Vector<Edge> fan, Vector<Edge> path) {
+
+    }
 
     private @NotNull Vector<Edge> createPath(Edge edge, HashMap<Edge, Byte> colouring, byte alpha, byte beta, int limit) {
         Vector<Edge> path = new Vector<>();
@@ -556,10 +561,6 @@ public class MSVC {
         }
     }
 
-    private record FirstChainResult(Vector<Edge> fan, Vector<Edge> path) {
-
-    }
-
     private @NotNull FirstFanResult firstFan(HashMap<Edge, Byte> colouring, Edge e, int x) {
         HashMap<Byte, Integer> nbr = new HashMap<>(maxDegree + 1);
         Vector<Integer> neighOfX = graph.get(x);
@@ -599,13 +600,12 @@ public class MSVC {
         return res;
     }
 
-    private record FirstFanResult(Vector<Edge> fan, byte color, int j) {
+    private record FirstFanResult(Vector<Edge> fan, byte colour, int j) {
 
     }
-    //todo change every chain to a linked list ?
 
     private HashMap<Edge, Byte> augmentWith(@NotNull HashMap<Edge, Byte> colouring, Vector<Edge> msvc) {
-        colouring = chainShift(colouring, new LinkedList<>(msvc), true);
+        colouring = shimano(colouring, new LinkedList<>(msvc), true);
         Edge edgeOfInterest = msvc.lastElement();
         byte validColour;
         HashSet<Byte> coloursOfx = missingColoursOfV.get(edgeOfInterest.x);

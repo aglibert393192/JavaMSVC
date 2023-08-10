@@ -2,7 +2,6 @@ package utils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import utils.MSVC;
 
 import java.util.*;
 
@@ -37,16 +36,46 @@ class MSVCTest {
 
     @Test
     void randomGraph() {
-        buildRandomBigGraph(1000, (byte) 5);
+        buildRandomBigGraph(1000, (byte) 5, );
         colouring = msvc.edgeColouring(graph, maxDegree);
         assertTrue(msvc.testColouring(colouring, graph));
     }
 
     @Test
     void longVizingChains() {
-        build1BigVizingChainsD3();
+        build1BigVizingChainsD2();
         colouring = msvc.edgeColouring(graph, (byte) 3);
         assertTrue(msvc.testColouring(colouring, graph));
+    }
+
+    private void build1BigVizingChainsD2() {
+        Vector<ArrayDeque<Vector<Integer>>> tmp = new Vector<>();
+        maxDegree = 2;
+        int pathSize = 3276802;
+        int i;
+        for (i = 0; i < 1; i++) {
+            ArrayDeque<Vector<Integer>> graphAsAD = new ArrayDeque<>();
+            Vector<Integer> adjacencyOf0 = new Vector<>(2);
+            oneVizingChain(graphAsAD, adjacencyOf0, pathSize * i + 1, pathSize, maxDegree);
+            tmp.add(graphAsAD);
+        }
+        ArrayDeque<Vector<Integer>> firstChain = tmp.firstElement();
+        firstChain.getLast().remove(Integer.valueOf(pathSize + 1));
+        graph = new Vector<>(firstChain);
+        testGraphValidity(graph);
+
+        System.out.println("wait for me");
+
+    }
+
+    @Test
+    public void increasinglyLargerRandomGraphsBenchmark() {
+        int seed = 42;
+        for (int i = 100; i < 10000; i += 100) {
+            buildRandomBigGraph(i, (byte) 5, seed);
+            colouring = msvc.edgeColouring(graph, maxDegree);
+            msvc.testColouring(colouring, graph);
+        }
     }
 
     @SuppressWarnings("OverlyLongMethod")
@@ -103,7 +132,7 @@ class MSVCTest {
         adjacencyOf11.add(5);
         adjacencyOf11.add(6);
         graph.add(adjacencyOf11);
-        testGraph(graph);
+        testGraphValidity(graph);
         return graph;
     }
 
@@ -121,11 +150,11 @@ class MSVCTest {
         }
         res.getLast().remove(1);
         Vector<Vector<Integer>> resAsVector = new Vector<>(res);
-        testGraph(resAsVector);
+        testGraphValidity(resAsVector);
         return resAsVector;
     }
 
-    private static void testGraph(Vector<Vector<Integer>> resAsVector) {
+    private static void testGraphValidity(Vector<Vector<Integer>> resAsVector) {
         int i;
         boolean correct;
         i = 0;
@@ -151,8 +180,8 @@ class MSVCTest {
             adjacencyOf0.add(i < 4 ? i : i + 1);
             res.addLast(someAdjacency);
         }
-        res.getLast().add(startingPoint + 3);
-        for (int i = startingPoint + 3; i < startingPoint + step; i++) {
+        res.getLast().add(startingPoint + maxDegree);
+        for (int i = startingPoint + maxDegree; i < startingPoint + step; i++) {
             Vector<Integer> someAdjacency = new Vector<>();
             someAdjacency.add(i - 1);
             someAdjacency.add(i + 1);
@@ -160,7 +189,7 @@ class MSVCTest {
         }
     }
 
-    private void buildRandomBigGraph(int numberOfVertices, byte edgeAddingLimit) {
+    private void buildRandomBigGraph(int numberOfVertices, byte edgeAddingLimit, int seed) {
         //TODO deal with the maxDegree problem somehow to be able to cover the rest of the code :-/
         Random localRng = new Random(4);
         Vector<Vector<Integer>> res = new Vector<>(numberOfVertices);
@@ -175,7 +204,7 @@ class MSVCTest {
             for (int j = 0; j < numberOfAddedNeighbours; j++) {
                 int connectedTo;
                 do {
-                    connectedTo = localRng.nextInt(0, numberOfVertices);
+                    connectedTo = localRng.nextInt(numberOfVertices);
                 } while (connectedTo == i);
                 if (!adjacencyOfI.contains(connectedTo)) {
                     adjacencyOfI.add(connectedTo);
@@ -185,12 +214,12 @@ class MSVCTest {
                 }
             }
         }
-        testGraph(res);
+        testGraphValidity(res);
         this.graph = res;
         this.maxDegree = realMaxDegree;
     }
 
-    private void build1BigVizingChainsD3() {
+    private void build1LongVizingChainsD3() {
         Vector<ArrayDeque<Vector<Integer>>> tmp = new Vector<>();
         maxDegree = 3;
         int pathSize = 47239201;
@@ -209,7 +238,7 @@ class MSVCTest {
         firstChain.addAll(secondChain);
         secondChain = null;
         graph = new Vector<>(firstChain);
-        testGraph(graph);
+        testGraphValidity(graph);
 
         System.out.println("wait for me");
 

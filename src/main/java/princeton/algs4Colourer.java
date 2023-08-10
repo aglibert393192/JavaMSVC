@@ -25,6 +25,7 @@ public class algs4Colourer {
             maxDegree = (byte) Math.max(maxDegree, adjacency.size());
             graphAsVecVec.add(adjacency);
         }
+        graph = null; // trying to clear as much memory as possible :-/
         MSVC msvc = new MSVC();
         return msvc.edgeColouring(graphAsVecVec, maxDegree);
     }
