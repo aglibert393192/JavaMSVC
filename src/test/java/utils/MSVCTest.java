@@ -1,8 +1,14 @@
 package utils;
 
+import edu.princeton.cs.algs4.StdOut;
+import edu.princeton.cs.algs4.Stopwatch;
+import edu.princeton.cs.algs4.StopwatchCPU;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,17 +42,17 @@ class MSVCTest {
 
     @Test
     void randomGraph() {
-        buildRandomBigGraph(1000, (byte) 5, );
+        buildRandomBigGraph(1000, (byte) 5, 4);
         colouring = msvc.edgeColouring(graph, maxDegree);
         assertTrue(msvc.testColouring(colouring, graph));
     }
 
-    @Test
+    /*@Test
     void longVizingChains() {
         build1BigVizingChainsD2();
         colouring = msvc.edgeColouring(graph, (byte) 3);
         assertTrue(msvc.testColouring(colouring, graph));
-    }
+    }*/
 
     private void build1BigVizingChainsD2() {
         Vector<ArrayDeque<Vector<Integer>>> tmp = new Vector<>();
@@ -69,19 +75,42 @@ class MSVCTest {
     }
 
     @Test
-    public void increasinglyLargerRandomGraphsBenchmark() {
+    public void increasinglyLargerRandomGraphsBenchmark() throws IOException {
         int seed = 42;
-        for (int i = 100; i < 10000; i += 100) {
-            buildRandomBigGraph(i, (byte) 5, seed);
-            colouring = msvc.edgeColouring(graph, maxDegree);
-            msvc.testColouring(colouring, graph);
+        File outputFile = new File("result.csv");
+        Stopwatch wallWatch;
+        StopwatchCPU CPUWatch;
+        double elapsedWall;
+        double elapsedCPU;
+        try (FileWriter outputWriter = new FileWriter(outputFile)) {
+            outputWriter.write("it;n;m;tWall;tCPU\n");
+            for (int it = 0; it < 1; it++) {
+                for (int i = 500; i < 10000; i += 500) {
+                    System.out.println(it + "-" + i);
+                    buildRandomBigGraph(i, (byte) 3, seed);
+                    wallWatch = new Stopwatch();
+                    CPUWatch = new StopwatchCPU();
+                    colouring = msvc.edgeColouring(graph, maxDegree);
+                    elapsedWall = wallWatch.elapsedTime();
+                    elapsedCPU = CPUWatch.elapsedTime();
+                    outputWriter.write(it + ";" +
+                            i + ";" +
+                            msvc.getNumberOfEdges() + ";" +
+                            elapsedWall + ";" +
+                            elapsedCPU + "\n");
+                    // assertTrue(msvc.testColouring(colouring, graph));
+                    msvc = new MSVC(42);
+                }
+            }
         }
+
     }
 
     @SuppressWarnings("OverlyLongMethod")
     private static Vector<Vector<Integer>> buildSimpleGraph() {
         Vector<Vector<Integer>> graph = new Vector<>(12);
         Vector<Integer> adjacencyOf0 = new Vector<>();
+        adjacencyOf0.add(10);
         graph.add(adjacencyOf0);
         Vector<Integer> adjacencyOf1 = new Vector<>();
         adjacencyOf1.add(2);
@@ -125,6 +154,7 @@ class MSVCTest {
         Vector<Integer> adjacencyOf10 = new Vector<>();
         adjacencyOf10.add(9);
         adjacencyOf10.add(3);
+        adjacencyOf10.add(0);
 
         graph.add(adjacencyOf10);
         Vector<Integer> adjacencyOf11 = new Vector<>();
@@ -160,12 +190,15 @@ class MSVCTest {
         i = 0;
         for (Vector<Integer> adjacency :
                 resAsVector) {
+            correct = !adjacency.isEmpty();
             for (int neigh :
                     adjacency) {
                 correct = resAsVector.get(neigh).contains(i);
                 if (!correct)
-                    throw new ExceptionInInitializerError("Graph doesn't seem to be undirected, at " + neigh + " " + adjacency);
+                    throw new ExceptionInInitializerError("Graph doesn't seem to be undirected, at " + i + "->" + neigh + " " + adjacency);
             }
+            if (!correct)
+                throw new ExceptionInInitializerError("Graph doesn't seem to be undirected, at " + i + adjacency);
             i++;
         }
     }
@@ -191,7 +224,7 @@ class MSVCTest {
 
     private void buildRandomBigGraph(int numberOfVertices, byte edgeAddingLimit, int seed) {
         //TODO deal with the maxDegree problem somehow to be able to cover the rest of the code :-/
-        Random localRng = new Random(4);
+        Random localRng = new Random(seed);
         Vector<Vector<Integer>> res = new Vector<>(numberOfVertices);
         for (int i = 0; i < numberOfVertices; i++) {
             Vector<Integer> adjacency = new Vector<>();
@@ -200,17 +233,20 @@ class MSVCTest {
         byte realMaxDegree = 0;
         for (int i = 0; i < numberOfVertices; i++) {
             Vector<Integer> adjacencyOfI = res.get(i);
-            byte numberOfAddedNeighbours = (byte) localRng.nextInt(edgeAddingLimit + 1);
-            for (int j = 0; j < numberOfAddedNeighbours; j++) {
-                int connectedTo;
-                do {
-                    connectedTo = localRng.nextInt(numberOfVertices);
-                } while (connectedTo == i);
-                if (!adjacencyOfI.contains(connectedTo)) {
-                    adjacencyOfI.add(connectedTo);
-                    Vector<Integer> adjacencyOfTo = res.get(connectedTo);
-                    adjacencyOfTo.add(i);
-                    realMaxDegree = (byte) Math.max(adjacencyOfTo.size(), realMaxDegree);
+            if (adjacencyOfI.size() < edgeAddingLimit) {
+                byte numberOfAddedNeighbours = (byte) (1 + localRng.nextInt(edgeAddingLimit - res.get(i).size()));
+                for (int j = 0; j < numberOfAddedNeighbours; j++) {
+                    int connectedTo;
+                    do {
+                        connectedTo = localRng.nextInt(numberOfVertices);
+                    } while (connectedTo == i || res.get(connectedTo).size() >= edgeAddingLimit);
+                    if (!adjacencyOfI.contains(connectedTo)) {
+                        adjacencyOfI.add(connectedTo);
+                        Vector<Integer> adjacencyOfTo = res.get(connectedTo);
+                        adjacencyOfTo.add(i);
+                        realMaxDegree = (byte) Math.max(adjacencyOfTo.size(), realMaxDegree);
+                        realMaxDegree = (byte) Math.max(adjacencyOfI.size(), realMaxDegree);
+                    }
                 }
             }
         }

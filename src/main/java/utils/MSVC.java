@@ -50,7 +50,7 @@ public class MSVC {
 
         Iterator<Edge> itU;
         itU = uncolouredEdges.iterator();
-        double printInterval = (double) 1 / 3276802;
+        int printInterval = Math.max(5 * graph.size() / 100, 200);
         double precPrint = -printInterval;
         do {
             Edge edge = itU.next();
@@ -58,15 +58,15 @@ public class MSVC {
             colouring = augmentWith(colouring, vizingChain);
             uncolouredEdges.remove(edge);
             itU = uncolouredEdges.iterator();
-            double propTreated = (double) ((edgeSet.size() - uncolouredEdges.size()) * 100) / edgeSet.size();
-            if (precPrint + printInterval <= propTreated) {
-                precPrint = (double) 100 * (edgeSet.size() - uncolouredEdges.size()) / edgeSet.size();
+            /*double qTreated = edgeSet.size() - uncolouredEdges.size();
+            if (precPrint + printInterval <= qTreated) {
+                precPrint = qTreated;
                 System.out.format("Has treated %04d/%04d (%2.2f)\n",
                         edgeSet.size() - uncolouredEdges.size(),
                         edgeSet.size(),
-                        precPrint);
+                        100 * qTreated / edgeSet.size());
 
-            }
+            }*/
         } while (itU.hasNext());
 
         result = colouringToArray(colouring);
@@ -80,6 +80,42 @@ public class MSVC {
         return result;
     }
 
+    public boolean testColouring(HashMap<Integer[], Byte> colouring, Vector<Vector<Integer>> graph) {
+        HashMap<Edge, Byte> internalColouring = new HashMap<>();
+        for (Integer[] key :
+                colouring.keySet()) {
+            Edge edge = new Edge(key[0], key[1]);
+            internalColouring.put(edge, colouring.get(key));
+        }
+        int current = 0;
+        boolean correct = true; //todo test when edgeSize = 8528
+        int printInterval = Math.max(5 * graph.size() / 100, 200);
+        double precPrint = -printInterval;
+        for (Vector<Integer> adjacency :
+                graph) {
+            HashSet<Byte> currentUsedColours = new HashSet<>();
+            for (int neigh :
+                    adjacency) {
+                Edge edge = new Edge(current, neigh);
+                byte edgeColour = internalColouring.get(edge);
+                correct &= !currentUsedColours.contains(edgeColour);
+                currentUsedColours.add(edgeColour);
+            }
+
+            double propTreated = current;
+            if (precPrint + printInterval <= propTreated) {
+                precPrint = propTreated;
+                System.out.format("Has checked %04d/%04d (%2.2f)\n",
+                        current,
+                        edgeSet.size(),
+                        100 * propTreated / edgeSet.size());
+
+            }
+            current++;
+        }
+        return correct;
+    }
+
     private HashMap<Integer[], Byte> colouringToArray(HashMap<Edge, Byte> colouring) {
         HashMap<Integer[], Byte> res = new HashMap<>();
         for (Edge key :
@@ -87,6 +123,10 @@ public class MSVC {
             res.put(key.toArray(), colouring.get(key));
         }
         return res;
+    }
+
+    public int getNumberOfEdges() {
+        return edgeSet.size();
     }
 
     private RandomHashSet<Edge> createFields(Vector<Vector<Integer>> graph, HashMap<Edge, Byte> colouring) {
@@ -233,30 +273,7 @@ public class MSVC {
     }
 
     private record FillVisitedResult(HashMap<Edge, Boolean> visitedEdges, HashMap<Integer, Boolean> visitedVertices) {
-    }
 
-    public boolean testColouring(HashMap<Integer[], Byte> colouring, Vector<Vector<Integer>> graph) {
-        HashMap<Edge, Byte> internalColouring = new HashMap<>();
-        for (Integer[] key :
-                colouring.keySet()) {
-            Edge edge = new Edge(key[0], key[1]);
-            internalColouring.put(edge, colouring.get(key));
-        }
-        int current = 0;
-        boolean correct = true;
-        for (Vector<Integer> adjacency :
-                graph) {
-            HashSet<Byte> currentUsedColours = new HashSet<>();
-            for (int neigh :
-                    adjacency) {
-                Edge edge = new Edge(current, neigh);
-                byte edgeColour = internalColouring.get(edge);
-                correct &= !currentUsedColours.contains(edgeColour);
-                currentUsedColours.add(edgeColour);
-            }
-            current++;
-        }
-        return correct;
     }
 
     private MSVAPreparationResult MSVAPreparation(Vector<Edge> firstFan, Vector<Edge> firstPath, HashMap<Integer, Boolean> visitedVertices, HashMap<Edge, Boolean> visitedEdges) {

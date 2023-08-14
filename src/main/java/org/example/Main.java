@@ -1,27 +1,97 @@
 package org.example;
 
+import edu.princeton.cs.algs4.Stopwatch;
+import edu.princeton.cs.algs4.StopwatchCPU;
 import utils.MSVC;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.Random;
 import java.util.Vector;
 
 public class Main {
-    public static void main(String[] args) {
+    static Vector<Vector<Integer>> graph;
+    private static byte maxDegree;
+    private static HashMap<Integer[], Byte> colouring;
 
-        Vector<Vector<Integer>> graph;
-        MSVC mscv;
+    public static void main(String[] args) throws IOException {
+
+
+        MSVC msvc;
 /*
         mscv = new MSVC(42);
         graph = simpleGraph();
         HashMap<Integer[], Byte> colouring = mscv.edgeColouring(graph, (byte) 3);
 */
 
-        graph = MSVCGraphD3();
+        msvc = new MSVC(42);
+        int seed = 42;
+        File outputFile = new File("result.csv");
+        Stopwatch wallWatch;
+        StopwatchCPU CPUWatch;
+        double elapsedWall;
+        double elapsedCPU;
+        try (FileWriter outputWriter = new FileWriter(outputFile)) {
+            outputWriter.write("it;n;m;tWall;tCPU\n");
+            for (int it = 0; it < 1; it++) {
+                for (int i = 500; i < 10000; i += 500) {
+                    System.out.println(it + "-" + i);
+                    buildRandomBigGraph(i, (byte) 3, seed);
+                    wallWatch = new Stopwatch();
+                    CPUWatch = new StopwatchCPU();
+                    colouring = msvc.edgeColouring(graph, maxDegree);
+                    elapsedWall = wallWatch.elapsedTime();
+                    elapsedCPU = CPUWatch.elapsedTime();
+                    outputWriter.write(it + ";" +
+                            i + ";" +
+                            msvc.getNumberOfEdges() + ";" +
+                            elapsedWall + ";" +
+                            elapsedCPU + "\n");
+                    // assertTrue(msvc.testColouring(colouring, graph));
+                    msvc = new MSVC(42);
+                }
+            }
+        }
 
-        mscv = new MSVC(42);
-        mscv.edgeColouring(graph, (byte) 3);
+
 
         System.out.println("I'll make mans out of youuuuuuuuuu !");
+    }
+
+    private static void buildRandomBigGraph(int numberOfVertices, byte edgeAddingLimit, int seed) {
+        //TODO deal with the maxDegree problem somehow to be able to cover the rest of the code :-/
+        Random localRng = new Random(seed);
+        Vector<Vector<Integer>> res = new Vector<>(numberOfVertices);
+        for (int i = 0; i < numberOfVertices; i++) {
+            Vector<Integer> adjacency = new Vector<>();
+            res.add(adjacency);
+        }
+        byte realMaxDegree = 0;
+        for (int i = 0; i < numberOfVertices; i++) {
+            Vector<Integer> adjacencyOfI = res.get(i);
+            if (adjacencyOfI.size() < edgeAddingLimit) {
+                byte numberOfAddedNeighbours = (byte) (1 + localRng.nextInt(edgeAddingLimit - res.get(i).size()));
+                for (int j = 0; j < numberOfAddedNeighbours; j++) {
+                    int connectedTo;
+                    do {
+                        connectedTo = localRng.nextInt(numberOfVertices);
+                    } while (connectedTo == i || res.get(connectedTo).size() >= edgeAddingLimit);
+                    if (!adjacencyOfI.contains(connectedTo)) {
+                        adjacencyOfI.add(connectedTo);
+                        Vector<Integer> adjacencyOfTo = res.get(connectedTo);
+                        adjacencyOfTo.add(i);
+                        realMaxDegree = (byte) Math.max(adjacencyOfTo.size(), realMaxDegree);
+                        realMaxDegree = (byte) Math.max(adjacencyOfI.size(), realMaxDegree);
+                    }
+                }
+            }
+        }
+//        testGraphValidity(res);
+        graph = res;
+        maxDegree = realMaxDegree;
     }
 
     private static Vector<Vector<Integer>> MSVCGraphD3() {
