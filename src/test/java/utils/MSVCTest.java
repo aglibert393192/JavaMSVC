@@ -1,16 +1,19 @@
 package utils;
 
-import edu.princeton.cs.algs4.StdOut;
 import edu.princeton.cs.algs4.Stopwatch;
 import edu.princeton.cs.algs4.StopwatchCPU;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.*;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MSVCTest {
@@ -54,26 +57,6 @@ class MSVCTest {
         assertTrue(msvc.testColouring(colouring, graph));
     }*/
 
-    private void build1BigVizingChainsD2() {
-        Vector<ArrayDeque<Vector<Integer>>> tmp = new Vector<>();
-        maxDegree = 2;
-        int pathSize = 3276802;
-        int i;
-        for (i = 0; i < 1; i++) {
-            ArrayDeque<Vector<Integer>> graphAsAD = new ArrayDeque<>();
-            Vector<Integer> adjacencyOf0 = new Vector<>(2);
-            oneVizingChain(graphAsAD, adjacencyOf0, pathSize * i + 1, pathSize, maxDegree);
-            tmp.add(graphAsAD);
-        }
-        ArrayDeque<Vector<Integer>> firstChain = tmp.firstElement();
-        firstChain.getLast().remove(Integer.valueOf(pathSize + 1));
-        graph = new Vector<>(firstChain);
-        testGraphValidity(graph);
-
-        System.out.println("wait for me");
-
-    }
-
     @Test
     public void increasinglyLargerRandomGraphsBenchmark() throws IOException {
         int seed = 42;
@@ -84,10 +67,10 @@ class MSVCTest {
         double elapsedCPU;
         try (FileWriter outputWriter = new FileWriter(outputFile)) {
             outputWriter.write("it;n;m;tWall;tCPU\n");
-            for (int it = 0; it < 1; it++) {
-                for (int i = 500; i < 10000; i += 500) {
+            for (int i = 500; i < 10000; i += 500) {
+                buildRandomBigGraph(i, (byte) 3, 42);
+                for (int it = 0; it < 1; it++) {
                     System.out.println(it + "-" + i);
-                    buildRandomBigGraph(i, (byte) 3, seed);
                     wallWatch = new Stopwatch();
                     CPUWatch = new StopwatchCPU();
                     colouring = msvc.edgeColouring(graph, maxDegree);
@@ -105,6 +88,66 @@ class MSVCTest {
         }
 
     }
+
+    @Test
+    public void testShimanoAscending() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Method shimanoMethod = MSVC.class.getDeclaredMethod("shimano", HashMap.class, LinkedList.class, boolean.class, HashMap.class);
+        shimanoMethod.setAccessible(true);
+        LinkedList<MSVC.Edge> chainToShift = new LinkedList<>();
+        chainToShift.addLast(new MSVC.Edge(0, 1));
+        chainToShift.addLast(new MSVC.Edge(2, 1));
+        chainToShift.addLast(new MSVC.Edge(2, 3));
+        HashMap<MSVC.Edge, Byte> colouring = new HashMap<>(3);
+        colouring.put(new MSVC.Edge(0, 1), (byte) 0);
+        colouring.put(new MSVC.Edge(2, 1), (byte) 1);
+        colouring.put(new MSVC.Edge(2, 3), (byte) 2);
+        boolean ascending = true;
+        HashMap<Integer, HashSet<Byte>> missingColoursOfV = buildMissingColoursOf();
+
+        //noinspection unchecked
+        HashMap<MSVC.Edge, Byte> actualColouring = (HashMap<MSVC.Edge, Byte>) shimanoMethod.invoke(null, colouring, chainToShift, ascending, missingColoursOfV);
+
+        HashMap<MSVC.Edge, Byte> expectedColouring = new HashMap<>();
+        expectedColouring.put(new MSVC.Edge(0, 1), (byte) 1);
+        expectedColouring.put(new MSVC.Edge(2, 1), (byte) 2);
+        expectedColouring.put(new MSVC.Edge(2, 3), (byte) 0);
+
+        assertEquals(expectedColouring, actualColouring);
+
+        HashMap<Integer, HashSet<Byte>> expectedMissingColoursOfAsc = buildExpectedMissingColoursOfAsc();
+        assertEquals(expectedMissingColoursOfAsc, missingColoursOfV);
+    }
+
+    @Test
+    public void testShimanoDescending() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Method shimanoMethod = MSVC.class.getDeclaredMethod("shimano", HashMap.class, LinkedList.class, boolean.class, HashMap.class);
+        shimanoMethod.setAccessible(true);
+        LinkedList<MSVC.Edge> chainToShift = new LinkedList<>();
+        chainToShift.addLast(new MSVC.Edge(0, 1));
+        chainToShift.addLast(new MSVC.Edge(2, 1));
+        chainToShift.addLast(new MSVC.Edge(2, 3));
+        HashMap<MSVC.Edge, Byte> colouring = new HashMap<>(3);
+        colouring.put(new MSVC.Edge(0, 1), (byte) 3);
+        colouring.put(new MSVC.Edge(2, 1), (byte) 1);
+        colouring.put(new MSVC.Edge(2, 3), (byte) 0);
+        boolean ascending = false;
+        HashMap<Integer, HashSet<Byte>> actualMissing = buildMissingColoursOf();
+
+        //noinspection unchecked
+        HashMap<MSVC.Edge, Byte> actualColouring = (HashMap<MSVC.Edge, Byte>) shimanoMethod.invoke(null, colouring, chainToShift, ascending, actualMissing);
+
+        HashMap<MSVC.Edge, Byte> expectedColouring = new HashMap<>();
+        expectedColouring.put(new MSVC.Edge(0, 1), (byte) 0);
+        expectedColouring.put(new MSVC.Edge(2, 1), (byte) 3);
+        expectedColouring.put(new MSVC.Edge(2, 3), (byte) 1);
+
+        assertEquals(expectedColouring, actualColouring);
+
+        HashMap<Integer, HashSet<Byte>> expectedMissingColoursOfAsc = buildExpectedMissingColoursOfDesc();
+        assertEquals(expectedMissingColoursOfAsc, actualMissing);
+    }
+
+
 
     @SuppressWarnings("OverlyLongMethod")
     private static Vector<Vector<Integer>> buildSimpleGraph() {
@@ -253,6 +296,85 @@ class MSVCTest {
         testGraphValidity(res);
         this.graph = res;
         this.maxDegree = realMaxDegree;
+    }
+
+    private HashMap<Integer, HashSet<Byte>> buildExpectedMissingColoursOfDesc() {
+        HashMap<Integer, HashSet<Byte>> missingColoursOfV = new HashMap<>(4);
+        HashSet<Byte> missingOf0 = new HashSet<>();
+        missingColoursOfV.put(0, missingOf0);
+        missingOf0.add((byte) 1);
+        missingOf0.add((byte) 2);
+        missingOf0.add((byte) 3);
+        HashSet<Byte> missingOf1 = new HashSet<>();
+        missingOf1.add((byte) 1);
+        missingOf1.add((byte) 2);
+        missingColoursOfV.put(1, missingOf1);
+        HashSet<Byte> missingOf2 = new HashSet<>();
+        missingColoursOfV.put(2, missingOf2);
+        HashSet<Byte> missingOf3 = new HashSet<>();
+        missingOf3.add((byte) 2);
+        missingColoursOfV.put(3, missingOf3);
+        return missingColoursOfV;
+    }
+
+    private HashMap<Integer, HashSet<Byte>> buildExpectedMissingColoursOfAsc() {
+        HashMap<Integer, HashSet<Byte>> missingColoursOfV = new HashMap<>(4);
+        HashSet<Byte> missingOf0 = new HashSet<>();
+        missingColoursOfV.put(0, missingOf0);
+        missingOf0.add((byte) 2);
+        HashSet<Byte> missingOf1 = new HashSet<>();
+        missingOf1.add((byte) 3);
+        missingColoursOfV.put(1, missingOf1);
+        HashSet<Byte> missingOf2 = new HashSet<>();
+        missingOf2.add((byte) 3);
+        missingOf2.add((byte) 1);
+        missingColoursOfV.put(2, missingOf2);
+        HashSet<Byte> missingOf3 = new HashSet<>();
+        missingOf2.add((byte) 1);
+        missingOf3.add((byte) 2);
+        missingColoursOfV.put(3, missingOf3);
+        return missingColoursOfV;
+    }
+
+    @NotNull
+    private static HashMap<Integer, HashSet<Byte>> buildMissingColoursOf() {
+        HashMap<Integer, HashSet<Byte>> missingColoursOfV = new HashMap<>(4);
+        HashSet<Byte> missingOf0 = new HashSet<>();
+        missingColoursOfV.put(0, missingOf0);
+        missingOf0.add((byte) 1);
+        missingOf0.add((byte) 2);
+        HashSet<Byte> missingOf1 = new HashSet<>();
+        missingOf1.add((byte) 2);
+        missingOf1.add((byte) 3);
+        missingColoursOfV.put(1, missingOf1);
+        HashSet<Byte> missingOf2 = new HashSet<>();
+        missingOf2.add((byte) 3);
+        missingColoursOfV.put(2, missingOf2);
+        HashSet<Byte> missingOf3 = new HashSet<>();
+        missingOf2.add((byte) 1);
+        missingOf3.add((byte) 2);
+        missingColoursOfV.put(3, missingOf3);
+        return missingColoursOfV;
+    }
+
+    private void build1BigVizingChainsD2() {
+        Vector<ArrayDeque<Vector<Integer>>> tmp = new Vector<>();
+        maxDegree = 2;
+        int pathSize = 3276802;
+        int i;
+        for (i = 0; i < 1; i++) {
+            ArrayDeque<Vector<Integer>> graphAsAD = new ArrayDeque<>();
+            Vector<Integer> adjacencyOf0 = new Vector<>(2);
+            oneVizingChain(graphAsAD, adjacencyOf0, pathSize * i + 1, pathSize, maxDegree);
+            tmp.add(graphAsAD);
+        }
+        ArrayDeque<Vector<Integer>> firstChain = tmp.firstElement();
+        firstChain.getLast().remove(Integer.valueOf(pathSize + 1));
+        graph = new Vector<>(firstChain);
+        testGraphValidity(graph);
+
+        System.out.println("wait for me");
+
     }
 
     private void build1LongVizingChainsD3() {

@@ -34,12 +34,13 @@ public class Main {
         StopwatchCPU CPUWatch;
         double elapsedWall;
         double elapsedCPU;
+        Random graphCreationRNG = new Random(seed);
         try (FileWriter outputWriter = new FileWriter(outputFile)) {
             outputWriter.write("it;n;m;tWall;tCPU\n");
-            for (int it = 0; it < 1; it++) {
-                for (int i = 500; i < 10000; i += 500) {
+            for (int i = 500; i < 10000; i += 500) {
+                buildRandomBigGraph(i, (byte) 3, graphCreationRNG.nextInt());
+                for (int it = 0; it < 1; it++) {
                     System.out.println(it + "-" + i);
-                    buildRandomBigGraph(i, (byte) 3, seed);
                     wallWatch = new Stopwatch();
                     CPUWatch = new StopwatchCPU();
                     colouring = msvc.edgeColouring(graph, maxDegree);
@@ -55,10 +56,6 @@ public class Main {
                 }
             }
         }
-
-
-
-        System.out.println("I'll make mans out of youuuuuuuuuu !");
     }
 
     private static void buildRandomBigGraph(int numberOfVertices, byte edgeAddingLimit, int seed) {

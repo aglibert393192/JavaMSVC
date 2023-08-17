@@ -211,7 +211,7 @@ public class MSVC {
                 byte lastColour = localColouring.get(preparationResult.currentPath().lastElement()); // denoted beta in Bernshteyn's
                 byte secondToLastColour = localColouring.get(preparationResult.currentPath().get(preparationResult.currentPath().size() - 2)); // denoted alpha in Bernshteyn's
 
-                localColouring = shimano(localColouring, new LinkedList<>(preparationResult.chainToShift()), true);
+                localColouring = shimano(localColouring, new LinkedList<>(preparationResult.chainToShift()), true, missingColoursOfV);
                 NextChainResult nextChainResult = nextChain(localColouring, preparationResult.lastOfPath(), preparationResult.lastVOfLastP(), secondToLastColour, lastColour);
                 Vector<Edge> FTilde = nextChainResult.f;
                 Vector<Edge> PTilde = nextChainResult.p;
@@ -221,7 +221,7 @@ public class MSVC {
                 if (intersection) {
                     Vector<Edge> toRevert = new Vector<>(chainAsConcat.get(intersectionPosition));
                     buildRevertedChain(chainAsConcat, k, intersectionPosition, toRevert);
-                    localColouring = shimano(localColouring, new LinkedList<>(toRevert), false);
+                    localColouring = shimano(localColouring, new LinkedList<>(toRevert), false, missingColoursOfV);
                     updateRemoved(intersectionPosition, k, chainAsConcat, visitedVertices, visitedEdges);
                     firstFan = chainAsConcat.get(intersectionPosition);
                     Vector<Edge> chainToElongate = chainAsConcat.get(intersectionPosition + 1);
@@ -368,7 +368,7 @@ public class MSVC {
         } else {
             if (delta == beta) {
                 p = createPath(f.lastElement(),
-                        shimano(localColouring, new LinkedList<>(f), true),
+                        shimano(localColouring, new LinkedList<>(f), true, missingColoursOfV),
                         alpha, beta, 2 * pathMaxLength);
                 res = new NextChainResult(f, p);
             } else {
@@ -380,10 +380,10 @@ public class MSVC {
                 Vector<Edge> fPrime = new Vector<>(f.subList(0, nextFanResult.j));
                 Vector<Edge> pPrime;
                 p = createPath(f.lastElement(),
-                        shimano(localColouring, new LinkedList<>(f), true),
+                        shimano(localColouring, new LinkedList<>(f), true, missingColoursOfV),
                         gamma, delta, 2 * pathMaxLength);
                 pPrime = createPath(fPrime.lastElement(),
-                        shimano(localColouring, new LinkedList<>(f), true),// todo is this correct ?
+                        shimano(localColouring, new LinkedList<>(f), true, missingColoursOfV),// todo is this correct ?
                         gamma, delta, 2 * pathMaxLength);
                 if (p.size() > 2 * pathMaxLength || p.lastElement().y != x) {
                     res = new NextChainResult(f, p);
@@ -461,7 +461,7 @@ public class MSVC {
 
     }
 
-    private @NotNull HashMap<Edge, Byte> shimano(HashMap<Edge, Byte> colouring, LinkedList<Edge> chainToShift, boolean ascending) {
+    private static @NotNull HashMap<Edge, Byte> shimano(HashMap<Edge, Byte> colouring, LinkedList<Edge> chainToShift, boolean ascending, HashMap<Integer, HashSet<Byte>> missingColoursOfV) {
         HashMap<Edge, Byte> res = deepCopyColouring(colouring);
         Iterator<Edge> iterator;
 
@@ -476,11 +476,11 @@ public class MSVC {
             e1 = iterator.next();
             byte e1Colour = res.get(e1);
             res.put(e0, e1Colour);
-            removeFromMissingOf(e0, e1Colour);
+            removeFromMissingOf(e0, e1Colour, missingColoursOfV);
 
             res.put(e1, (byte) 0);
             int sharedNode = e0.sharedNode(e1);
-            addToMissingOf(e1, e1Colour, sharedNode);
+            addToMissingOf(e1, e1Colour, sharedNode, missingColoursOfV);
             // problem when making it become blank
             e0 = e1;
         }
@@ -488,13 +488,13 @@ public class MSVC {
         return res;
     }
 
-    private void addToMissingOf(Edge edge, byte previousColour, int sharedNode) {
+    private static void addToMissingOf(Edge edge, byte previousColour, int sharedNode, HashMap<Integer, HashSet<Byte>> missingColoursOfV) {
         int nodeToUpdate = edge.x == sharedNode ? edge.y : edge.x;
         if (previousColour != 0)
             missingColoursOfV.get(nodeToUpdate).add(previousColour);
     }
 
-    private void removeFromMissingOf(Edge colouredEdge, byte chosenColour) {
+    private static void removeFromMissingOf(Edge colouredEdge, byte chosenColour, HashMap<Integer, HashSet<Byte>> missingColoursOfV) {
         missingColoursOfV.get(colouredEdge.x).remove(chosenColour);
         missingColoursOfV.get(colouredEdge.y).remove(chosenColour);
     }
@@ -510,16 +510,16 @@ public class MSVC {
         byte beta = firstFanResult.colour;
         int j = firstFanResult.j;
         FirstChainResult res;
-        HashSet<Byte> coloursOfEdge = missingColoursOfV.get(x);
-        if (coloursOfEdge.contains(beta)) {
+        HashSet<Byte> coloursOfVertex = missingColoursOfV.get(x);
+        if (coloursOfVertex.contains(beta)) {
             Vector<Edge> path = new Vector<>();
             path.add(fan.lastElement());
             res = new FirstChainResult(fan, path);
         } else {
-            byte alpha = coloursOfEdge.iterator().next();
+            byte alpha = coloursOfVertex.iterator().next();
             Vector<Edge> fPrime = new Vector<>(fan.subList(0, j));
-            Vector<Edge> p = createPath(fan.lastElement(), shimano(colouring, new LinkedList<>(fan), true), alpha, beta, 2 * pathMaxLength);
-            Vector<Edge> pPrime = createPath(fPrime.lastElement(), shimano(colouring, new LinkedList<>(fPrime), true), alpha, beta, 2 * pathMaxLength);
+            Vector<Edge> p = createPath(fan.lastElement(), shimano(colouring, new LinkedList<>(fan), true, missingColoursOfV), alpha, beta, 2 * pathMaxLength);
+            Vector<Edge> pPrime = createPath(fPrime.lastElement(), shimano(colouring, new LinkedList<>(fPrime), true, missingColoursOfV), alpha, beta, 2 * pathMaxLength);
             if (p.size() > 2 * pathMaxLength || p.lastElement().y != x) {
                 res = new FirstChainResult(fan, p);
             } else {
@@ -550,7 +550,7 @@ public class MSVC {
             x = v;
             y = u;
         }
-        path.add(new Edge(x, y));
+//        path.add(new Edge(x, y));
 
         elongatePathUntil(colouring, alpha, beta, y, x, path, limit);
         return path;
@@ -622,7 +622,7 @@ public class MSVC {
     }
 
     private HashMap<Edge, Byte> augmentWith(@NotNull HashMap<Edge, Byte> colouring, Vector<Edge> msvc) {
-        colouring = shimano(colouring, new LinkedList<>(msvc), true);
+        colouring = shimano(colouring, new LinkedList<>(msvc), true, missingColoursOfV);
         Edge edgeOfInterest = msvc.lastElement();
         byte validColour;
         HashSet<Byte> coloursOfx = missingColoursOfV.get(edgeOfInterest.x);
@@ -631,7 +631,7 @@ public class MSVC {
         do {
             validColour = coloursOfXIt.next();
         } while (!coloursOfy.contains(validColour));
-        removeFromMissingOf(edgeOfInterest, validColour);
+        removeFromMissingOf(edgeOfInterest, validColour, missingColoursOfV);
         colouring.put(edgeOfInterest, validColour);
         return colouring;
     }
